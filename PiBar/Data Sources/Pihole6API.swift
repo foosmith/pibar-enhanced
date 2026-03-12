@@ -370,6 +370,12 @@ class Pihole6API: NSObject {
         return try await performData(request)
     }
 
+    func postData(_ path: String, apiKey: String? = nil, queryItems: [URLQueryItem] = [], body: Encodable? = nil) async throws -> Data {
+        let url = try makeURL(for: path, queryItems: queryItems)
+        let request = try request(for: url, method: "POST", apiKey: apiKey, body: body)
+        return try await performData(request)
+    }
+
     func deleteData(_ path: String, apiKey: String? = nil, queryItems: [URLQueryItem] = []) async throws -> Data {
         let url = try makeURL(for: path, queryItems: queryItems)
         let request = try request(for: url, method: "DELETE", apiKey: apiKey)
@@ -377,7 +383,7 @@ class Pihole6API: NSObject {
     }
 
     static func encodePathComponent(_ raw: String) -> String {
-        let allowed = CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
         return raw.addingPercentEncoding(withAllowedCharacters: allowed) ?? raw
     }
 

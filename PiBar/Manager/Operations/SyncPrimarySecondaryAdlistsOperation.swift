@@ -68,6 +68,8 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
                     message = "Secondary rejected writes (403). Enable Pi-hole v6 app_sudo (webserver.api.app_sudo=true)."
                 case .unauthorized:
                     message = "Unauthorized (401). Re-authenticate Primary/Secondary in Preferences."
+                case let .invalidResponse(statusCode: statusCode, content: content):
+                    message = "Sync failed (\(statusCode)). \(content)"
                 default:
                     message = "Sync failed: \(apiError)"
                 }
@@ -90,9 +92,23 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
     }
 
     private struct AdlistWriteRequest: Encodable {
+        let type: String?
         let enabled: Bool?
         let comment: String?
         let groups: [Int]?
+    }
+
+    private struct AdlistCreateRequest: Encodable {
+        let address: String
+        let type: String
+        let enabled: Bool?
+        let comment: String?
+        let groups: [Int]?
+    }
+
+    private struct BatchDeleteRequest: Encodable {
+        let type: String
+        let items: [String]
     }
 
     private func syncAdlists(primary: Pihole6API, secondary: Pihole6API) async throws -> String {
@@ -112,15 +128,30 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
         var deleted = 0
         for address in toDelete {
             let encoded = Pihole6API.encodePathComponent(address)
-            _ = try await secondary.deleteData(
-                "/lists/\(encoded)",
-                apiKey: secondary.connection.token,
-                queryItems: [
-                    URLQueryItem(name: "type", value: "block"),
-                    URLQueryItem(name: "app_sudo", value: "true"),
-                ]
-            )
-            deleted += 1
+            do {
+                _ = try await secondary.deleteData(
+                    "/lists/\(encoded)",
+                    apiKey: secondary.connection.token,
+                    queryItems: [
+                        URLQueryItem(name: "type", value: "block"),
+                        URLQueryItem(name: "app_sudo", value: "true"),
+                    ]
+                )
+                deleted += 1
+            } catch let apiError as APIError {
+                // Some versions may not support DELETE for lists; try batchDelete.
+                if case let .invalidResponse(statusCode: status, content: _) = apiError, status == 404 {
+                    _ = try await secondary.postData(
+                        "/lists:batchDelete",
+                        apiKey: secondary.connection.token,
+                        queryItems: [URLQueryItem(name: "app_sudo", value: "true")],
+                        body: BatchDeleteRequest(type: "block", items: [address])
+                    )
+                    deleted += 1
+                    continue
+                }
+                throw apiError
+            }
         }
 
         var created = 0
@@ -131,15 +162,29 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
             let isUpdate = existing != nil
 
             let encoded = Pihole6API.encodePathComponent(address)
-            _ = try await secondary.putData(
-                "/lists/\(encoded)",
-                apiKey: secondary.connection.token,
-                queryItems: [
-                    URLQueryItem(name: "type", value: "block"),
-                    URLQueryItem(name: "app_sudo", value: "true"),
-                ],
-                body: AdlistWriteRequest(enabled: desired.enabled, comment: desired.comment, groups: desired.groups)
-            )
+            do {
+                _ = try await secondary.putData(
+                    "/lists/\(encoded)",
+                    apiKey: secondary.connection.token,
+                    queryItems: [
+                        URLQueryItem(name: "type", value: "block"),
+                        URLQueryItem(name: "app_sudo", value: "true"),
+                    ],
+                    body: AdlistWriteRequest(type: "block", enabled: desired.enabled, comment: desired.comment, groups: desired.groups)
+                )
+            } catch let apiError as APIError {
+                // Some versions may not allow PUT to create. Try POST /lists to create.
+                if case let .invalidResponse(statusCode: status, content: _) = apiError, status == 404, !isUpdate {
+                    _ = try await secondary.postData(
+                        "/lists",
+                        apiKey: secondary.connection.token,
+                        queryItems: [URLQueryItem(name: "app_sudo", value: "true")],
+                        body: AdlistCreateRequest(address: desired.address, type: "block", enabled: desired.enabled, comment: desired.comment, groups: desired.groups)
+                    )
+                } else {
+                    throw apiError
+                }
+            }
 
             if isUpdate {
                 updated += 1
@@ -152,7 +197,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
     }
 
     private func fetchAdlists(api: Pihole6API) async throws -> [Adlist] {
-        let data = try await api.getData("/lists", apiKey: api.connection.token)
+        let data = try await api.getData("/lists", apiKey: api.connection.token, queryItems: [URLQueryItem(name: "type", value: "block")])
         let object = try JSONSerialization.jsonObject(with: data)
 
         let listsArray: [Any]
@@ -177,4 +222,3 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
         }
     }
 }
-
