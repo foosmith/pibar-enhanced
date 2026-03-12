@@ -15,12 +15,15 @@ final class SyncPrimarySecondaryDryRunOperation: AsyncOperation, @unchecked Send
             guard let self else { return }
             defer { self.state = .isFinished }
 
+            SyncProgress.report("Dry run: starting…")
+
             let enabled = Preferences.standard.syncEnabled
             if !enabled {
                 self.resultMessage = "Sync disabled."
                 Preferences.standard.set(syncLastStatus: "skipped")
                 Preferences.standard.set(syncLastMessage: self.resultMessage)
                 Preferences.standard.set(syncLastRunAt: Date())
+                SyncProgress.report("Dry run: skipped (disabled).")
                 return
             }
 
@@ -31,6 +34,7 @@ final class SyncPrimarySecondaryDryRunOperation: AsyncOperation, @unchecked Send
                 Preferences.standard.set(syncLastStatus: "skipped")
                 Preferences.standard.set(syncLastMessage: self.resultMessage)
                 Preferences.standard.set(syncLastRunAt: Date())
+                SyncProgress.report("Dry run: skipped (select distinct Primary/Secondary).")
                 return
             }
 
@@ -43,6 +47,7 @@ final class SyncPrimarySecondaryDryRunOperation: AsyncOperation, @unchecked Send
                 Preferences.standard.set(syncLastStatus: "failed")
                 Preferences.standard.set(syncLastMessage: self.resultMessage)
                 Preferences.standard.set(syncLastRunAt: Date())
+                SyncProgress.report("Dry run: failed (connections not found).")
                 return
             }
 
@@ -50,21 +55,25 @@ final class SyncPrimarySecondaryDryRunOperation: AsyncOperation, @unchecked Send
             let secondaryAPI = Pihole6API(connection: secondaryConnection)
 
             do {
+                SyncProgress.report("Dry run: fetching lists/groups/domains…")
                 let dryRun = try await computeDryRun(primary: primaryAPI, secondary: secondaryAPI)
                 self.resultMessage = dryRun
                 Preferences.standard.set(syncLastStatus: "dry-run")
                 Preferences.standard.set(syncLastMessage: dryRun)
                 Preferences.standard.set(syncLastRunAt: Date())
+                SyncProgress.report("Dry run: \(dryRun)")
             } catch let apiError as APIError {
                 self.resultMessage = "Dry run failed: \(apiError)"
                 Preferences.standard.set(syncLastStatus: "failed")
                 Preferences.standard.set(syncLastMessage: self.resultMessage)
                 Preferences.standard.set(syncLastRunAt: Date())
+                SyncProgress.report("Dry run: \(self.resultMessage)")
             } catch {
                 self.resultMessage = "Dry run failed: \(error.localizedDescription)"
                 Preferences.standard.set(syncLastStatus: "failed")
                 Preferences.standard.set(syncLastMessage: self.resultMessage)
                 Preferences.standard.set(syncLastRunAt: Date())
+                SyncProgress.report("Dry run: \(self.resultMessage)")
             }
         }
     }

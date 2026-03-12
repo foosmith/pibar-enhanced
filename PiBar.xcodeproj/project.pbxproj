@@ -22,6 +22,7 @@
 		4438184E247DE31A009D9B3F /* AboutViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4438184D247DE31A009D9B3F /* AboutViewController.swift */; };
 		44381850247DE41B009D9B3F /* AboutWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4438184F247DE41B009D9B3F /* AboutWindowController.swift */; };
 		447CCB5C2D87FBA200811F7C /* UpdatePiholeV6Operation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 447CCB5B2D87FB9C00811F7C /* UpdatePiholeV6Operation.swift */; };
+		3D3FE7A5F7E54B5BA6E7B3F1 /* SyncProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D3FE7A5F7E54B5BA6E7B3F0 /* SyncProgress.swift */; };
 		449395D62471ABD600FA0C34 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 449395D52471ABD600FA0C34 /* AppDelegate.swift */; };
 		449395DA2471ABD700FA0C34 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 449395D92471ABD700FA0C34 /* Assets.xcassets */; };
 		449395DD2471ABD700FA0C34 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 449395DB2471ABD700FA0C34 /* Main.storyboard */; };
@@ -67,6 +68,7 @@
 		4438184D247DE31A009D9B3F /* AboutViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutViewController.swift; sourceTree = "<group>"; };
 		4438184F247DE41B009D9B3F /* AboutWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutWindowController.swift; sourceTree = "<group>"; };
 		447CCB5B2D87FB9C00811F7C /* UpdatePiholeV6Operation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatePiholeV6Operation.swift; sourceTree = "<group>"; };
+		3D3FE7A5F7E54B5BA6E7B3F0 /* SyncProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncProgress.swift; sourceTree = "<group>"; };
 		449395D22471ABD600FA0C34 /* PiBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PiBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		449395D52471ABD600FA0C34 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		449395D92471ABD700FA0C34 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -136,6 +138,7 @@
 			isa = PBXGroup;
 			children = (
 				441E78B1247E3ECB00FBC7A0 /* Operations */,
+				3D3FE7A5F7E54B5BA6E7B3F0 /* SyncProgress.swift */,
 				44FFB091247627B100DCEDEC /* PiBarManager.swift */,
 			);
 			path = Manager;
@@ -347,6 +350,7 @@
 				447CCB5C2D87FBA200811F7C /* UpdatePiholeV6Operation.swift in Sources */,
 				9D4C0B11B5F24B3AAE6E3D25 /* SyncPrimarySecondaryDryRunOperation.swift in Sources */,
 				7A2A68B0A3F14B8EA6C4C3D1 /* SyncPrimarySecondaryAdlistsOperation.swift in Sources */,
+				3D3FE7A5F7E54B5BA6E7B3F1 /* SyncProgress.swift in Sources */,
 				44E390C42D8785E1002196DC /* Pihole6API.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

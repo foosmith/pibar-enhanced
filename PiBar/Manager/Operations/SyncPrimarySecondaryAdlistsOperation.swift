@@ -13,10 +13,13 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
             guard let self else { return }
             defer { self.state = .isFinished }
 
+            SyncProgress.report("Adlists sync: starting…")
+
             guard Preferences.standard.syncEnabled else {
                 Preferences.standard.set(syncLastStatus: "skipped")
                 Preferences.standard.set(syncLastMessage: "Sync disabled.")
                 Preferences.standard.set(syncLastRunAt: Date())
+                SyncProgress.report("Adlists sync: skipped (disabled).")
                 return
             }
 
@@ -26,6 +29,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
                 Preferences.standard.set(syncLastStatus: "skipped")
                 Preferences.standard.set(syncLastMessage: "Select distinct Primary and Secondary.")
                 Preferences.standard.set(syncLastRunAt: Date())
+                SyncProgress.report("Adlists sync: skipped (select distinct Primary/Secondary).")
                 return
             }
 
@@ -37,6 +41,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
                 Preferences.standard.set(syncLastStatus: "failed")
                 Preferences.standard.set(syncLastMessage: "Primary/Secondary connections not found.")
                 Preferences.standard.set(syncLastRunAt: Date())
+                SyncProgress.report("Adlists sync: failed (connections not found).")
                 return
             }
 
@@ -44,12 +49,14 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
                 Preferences.standard.set(syncLastStatus: "failed")
                 Preferences.standard.set(syncLastMessage: "Primary requires authentication (missing session).")
                 Preferences.standard.set(syncLastRunAt: Date())
+                SyncProgress.report("Adlists sync: failed (primary missing session).")
                 return
             }
             if secondaryConnection.passwordProtected, secondaryConnection.token.isEmpty {
                 Preferences.standard.set(syncLastStatus: "failed")
                 Preferences.standard.set(syncLastMessage: "Secondary requires authentication (missing session).")
                 Preferences.standard.set(syncLastRunAt: Date())
+                SyncProgress.report("Adlists sync: failed (secondary missing session).")
                 return
             }
 
@@ -61,6 +68,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
                 Preferences.standard.set(syncLastStatus: "success")
                 Preferences.standard.set(syncLastMessage: result)
                 Preferences.standard.set(syncLastRunAt: Date())
+                SyncProgress.report("Adlists sync: \(result)")
             } catch let apiError as APIError {
                 let message: String
                 switch apiError {
@@ -76,10 +84,12 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
                 Preferences.standard.set(syncLastStatus: "failed")
                 Preferences.standard.set(syncLastMessage: message)
                 Preferences.standard.set(syncLastRunAt: Date())
+                SyncProgress.report("Adlists sync: \(message)")
             } catch {
                 Preferences.standard.set(syncLastStatus: "failed")
                 Preferences.standard.set(syncLastMessage: "Sync failed: \(error.localizedDescription)")
                 Preferences.standard.set(syncLastRunAt: Date())
+                SyncProgress.report("Adlists sync: failed (\(error.localizedDescription))")
             }
         }
     }
@@ -110,6 +120,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
     }
 
     private func syncAdlists(primary: Pihole6API, secondary: Pihole6API) async throws -> String {
+        SyncProgress.report("Adlists sync: fetching lists…")
         async let primaryLists = fetchAdlists(api: primary)
         async let secondaryLists = fetchAdlists(api: secondary)
         let (pl, sl) = try await (primaryLists, secondaryLists)
@@ -123,9 +134,14 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
         let toDelete = Array(secondaryKeys.subtracting(primaryKeys)).sorted()
         let toUpsert = Array(primaryKeys).sorted()
 
+        SyncProgress.report("Adlists sync: will reconcile \(toUpsert.count) primary lists; \(toDelete.count) secondary extras.")
+
         var deleted = 0
         var disabled = 0
         var fixed = 0
+        if !toDelete.isEmpty {
+            SyncProgress.report("Adlists sync: removing secondary extras…")
+        }
         for address in toDelete {
             guard let list = secondaryByAddress[address] else { continue }
             // Primary/Secondary sync policy: remove extras. On this Pi-hole build, delete may not be supported
@@ -157,6 +173,9 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
 
         var created = 0
         var updated = 0
+        if !toUpsert.isEmpty {
+            SyncProgress.report("Adlists sync: applying primary lists…")
+        }
         for address in toUpsert {
             guard let desired = primaryByAddress[address] else { continue }
             let existing = secondaryByAddress[address]
@@ -201,6 +220,11 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
                 updated += 1
             } else {
                 created += 1
+            }
+
+            let processed = created + updated
+            if processed % 25 == 0 {
+                SyncProgress.report("Adlists sync: processed \(processed)/\(toUpsert.count)…")
             }
         }
 

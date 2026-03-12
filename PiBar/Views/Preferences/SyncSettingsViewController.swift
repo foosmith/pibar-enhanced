@@ -23,6 +23,8 @@ final class SyncSettingsViewController: NSViewController {
     private let intervalLabel = NSTextField(labelWithString: "Interval (minutes)")
     private let intervalField = NSTextField()
     private let statusLabel = NSTextField(labelWithString: "")
+    private let logScrollView = NSScrollView()
+    private let logTextView = NSTextView()
 
     private let syncNowButton = NSButton(title: "Sync Now", target: nil, action: nil)
     private let closeButton = NSButton(title: "Close", target: nil, action: nil)
@@ -32,13 +34,15 @@ final class SyncSettingsViewController: NSViewController {
     }
 
     override func loadView() {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 760, height: 260))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 760, height: 360))
 
         primaryPopup.translatesAutoresizingMaskIntoConstraints = false
         secondaryPopup.translatesAutoresizingMaskIntoConstraints = false
         intervalField.translatesAutoresizingMaskIntoConstraints = false
         syncEnabledCheckbox.translatesAutoresizingMaskIntoConstraints = false
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        logScrollView.translatesAutoresizingMaskIntoConstraints = false
+        logTextView.translatesAutoresizingMaskIntoConstraints = false
         syncNowButton.translatesAutoresizingMaskIntoConstraints = false
         closeButton.translatesAutoresizingMaskIntoConstraints = false
 
@@ -101,9 +105,19 @@ final class SyncSettingsViewController: NSViewController {
         statusLabel.isSelectable = true
         statusLabel.allowsEditingTextAttributes = true
 
+        logTextView.isEditable = false
+        logTextView.isSelectable = true
+        logTextView.font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        logTextView.textContainerInset = NSSize(width: 6, height: 6)
+        logScrollView.documentView = logTextView
+        logScrollView.hasVerticalScroller = true
+        logScrollView.borderType = .bezelBorder
+        logScrollView.drawsBackground = false
+
         container.addSubview(syncEnabledCheckbox)
         container.addSubview(grid)
         container.addSubview(statusLabel)
+        container.addSubview(logScrollView)
         container.addSubview(buttons)
 
         NSLayoutConstraint.activate([
@@ -121,7 +135,12 @@ final class SyncSettingsViewController: NSViewController {
             statusLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
             statusLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
 
-            buttons.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 16),
+            logScrollView.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 10),
+            logScrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            logScrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
+            logScrollView.heightAnchor.constraint(equalToConstant: 110),
+
+            buttons.topAnchor.constraint(equalTo: logScrollView.bottomAnchor, constant: 14),
             buttons.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
             buttons.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -20),
         ])
@@ -132,8 +151,13 @@ final class SyncSettingsViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Sync Settings"
-        preferredContentSize = NSSize(width: 760, height: 260)
+        preferredContentSize = NSSize(width: 760, height: 360)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleSyncProgress(_:)), name: .piBarSyncProgress, object: nil)
         refreshUI()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     override func viewWillAppear() {
@@ -261,6 +285,22 @@ final class SyncSettingsViewController: NSViewController {
         }
     }
 
+    @objc private func handleSyncProgress(_ notification: Notification) {
+        guard let userInfo = notification.userInfo else { return }
+        guard let message = userInfo[SyncProgress.messageKey] as? String else { return }
+        appendLog(message)
+    }
+
+    private func appendLog(_ line: String) {
+        let prefix = logTextView.string.isEmpty ? "" : "\n"
+        logTextView.string += "\(prefix)\(line)"
+        logTextView.scrollToEndOfDocument(nil)
+    }
+
+    private func clearLog() {
+        logTextView.string = ""
+    }
+
     private func persistSelections() {
         Preferences.standard.set(syncEnabled: syncEnabledCheckbox.state == .on)
 
@@ -302,6 +342,8 @@ final class SyncSettingsViewController: NSViewController {
 
     @objc private func syncNowPressed() {
         persistSelections()
+        clearLog()
+        appendLog("Sync Now: requested")
         delegate?.syncNowRequestedFromSettings()
         refreshUI()
     }
