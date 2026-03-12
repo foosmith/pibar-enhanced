@@ -108,7 +108,11 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
 
     private struct BatchDeleteRequest: Encodable {
         let type: String
-        let items: [String]
+        let items: [BatchDeleteItem]
+    }
+
+    private struct BatchDeleteItem: Encodable {
+        let address: String
     }
 
     private func syncAdlists(primary: Pihole6API, secondary: Pihole6API) async throws -> String {
@@ -145,7 +149,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
                         "/lists:batchDelete",
                         apiKey: secondary.connection.token,
                         queryItems: [URLQueryItem(name: "app_sudo", value: "true")],
-                        body: BatchDeleteRequest(type: "block", items: [address])
+                        body: BatchDeleteRequest(type: "block", items: [BatchDeleteItem(address: address)])
                     )
                     deleted += 1
                     continue

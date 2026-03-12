@@ -304,7 +304,7 @@ class Pihole6API: NSObject {
                 }
                 throw APIError.invalidResponse(
                     statusCode: response.statusCode,
-                    content: String(describing: String(data: data, encoding: .utf8)))
+                    content: String(data: data, encoding: .utf8) ?? "<non-utf8 response>")
             }
             do {
 //                Log.debug(String(data: data, encoding: .utf8) ?? "No data")
@@ -333,7 +333,7 @@ class Pihole6API: NSObject {
                 }
                 throw APIError.invalidResponse(
                     statusCode: response.statusCode,
-                    content: String(describing: String(data: data, encoding: .utf8)))
+                    content: String(data: data, encoding: .utf8) ?? "<non-utf8 response>")
             }
             return data
         } catch {
