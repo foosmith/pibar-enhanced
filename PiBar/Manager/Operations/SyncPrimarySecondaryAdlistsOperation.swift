@@ -108,7 +108,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
     }
 
     private struct BatchDeleteRequest: Encodable {
-        let type: String
+        let type: String?
         let items: [EncodableItem]
     }
 
@@ -151,6 +151,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
         let toUpsert = Array(primaryKeys).sorted()
 
         var deleted = 0
+        var disabled = 0
         for address in toDelete {
             let encoded = Pihole6API.encodePathComponent(address)
             do {
@@ -166,9 +167,27 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
             } catch let apiError as APIError {
                 // Some versions may not support DELETE for lists; try batchDelete.
                 if case let .invalidResponse(statusCode: status, content: _) = apiError, status == 404 {
-                    try await batchDeleteAdlist(address: address, secondaryByAddress: secondaryByAddress, secondary: secondary)
-                    deleted += 1
-                    continue
+                    do {
+                        try await batchDeleteAdlist(address: address, secondaryByAddress: secondaryByAddress, secondary: secondary)
+                        deleted += 1
+                        continue
+                    } catch let batchError as APIError {
+                        // If batchDelete exists but rejects our payload, fall back to disabling the extra list.
+                        if case .invalidResponse(statusCode: 400, content: _) = batchError {
+                            _ = try await secondary.putData(
+                                "/lists/\(encoded)",
+                                apiKey: secondary.connection.token,
+                                queryItems: [
+                                    URLQueryItem(name: "type", value: "block"),
+                                    URLQueryItem(name: "app_sudo", value: "true"),
+                                ],
+                                body: AdlistWriteRequest(type: "block", enabled: false, comment: "Disabled by PiBar sync (delete unsupported)", groups: nil)
+                            )
+                            disabled += 1
+                            continue
+                        }
+                        throw batchError
+                    }
                 }
                 throw apiError
             }
@@ -213,6 +232,9 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
             }
         }
 
+        if disabled > 0 {
+            return "Adlists synced: +\(created) ~\(updated) -\(deleted) (disabled \(disabled) extras)"
+        }
         return "Adlists synced: +\(created) ~\(updated) -\(deleted)"
     }
 
@@ -247,10 +269,13 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
         // Prefer deleting by id if available; payload shapes appear to vary across Pi-hole v6 builds.
         var attempts: [(String, BatchDeleteRequest)] = []
         if let id = secondaryByAddress[address]?.id {
-            attempts.append(("id", BatchDeleteRequest(type: "block", items: [EncodableItem(id: id)])))
+            attempts.append(("id+type", BatchDeleteRequest(type: "block", items: [EncodableItem(id: id)])))
+            attempts.append(("id", BatchDeleteRequest(type: nil, items: [EncodableItem(id: id)])))
         }
-        attempts.append(("address", BatchDeleteRequest(type: "block", items: [EncodableItem(address: address)])))
-        attempts.append(("item", BatchDeleteRequest(type: "block", items: [EncodableItem(item: address)])))
+        attempts.append(("address+type", BatchDeleteRequest(type: "block", items: [EncodableItem(address: address)])))
+        attempts.append(("address", BatchDeleteRequest(type: nil, items: [EncodableItem(address: address)])))
+        attempts.append(("item+type", BatchDeleteRequest(type: "block", items: [EncodableItem(item: address)])))
+        attempts.append(("item", BatchDeleteRequest(type: nil, items: [EncodableItem(item: address)])))
 
         var lastError: APIError?
         for (label, body) in attempts {
