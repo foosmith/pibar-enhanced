@@ -126,10 +126,12 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
         SyncProgress.report("Adlists sync: fetching lists…")
         async let primaryLists = fetchAdlists(api: primary)
         async let secondaryLists = fetchAdlists(api: secondary)
-        let (pl, sl) = try await (primaryLists, secondaryLists)
+        let (pl, slRaw) = try await (primaryLists, secondaryLists)
 
-        let primaryByAddress = Dictionary(uniqueKeysWithValues: pl.map { ($0.addressNormalized, $0) })
-        let secondaryByAddress = Dictionary(uniqueKeysWithValues: sl.map { ($0.addressNormalized, $0) })
+        let sl = try await sanitizeSecondaryPercentEncodedLists(secondary: secondary, lists: slRaw)
+
+        let primaryByAddress = indexByNormalizedAddress(pl)
+        let secondaryByAddress = indexByNormalizedAddress(sl)
 
         let primaryKeys = Set(primaryByAddress.keys)
         let secondaryKeys = Set(secondaryByAddress.keys)
@@ -141,7 +143,6 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
 
         var deleted = 0
         var disabled = 0
-        var fixed = 0
         if !toDelete.isEmpty {
             SyncProgress.report("Adlists sync: removing secondary extras…")
         }
@@ -184,22 +185,6 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
             let existing = secondaryByAddress[address]
             let isUpdate = existing != nil
 
-            if let existing, existing.addressStored != desired.addressNormalized, looksPercentEncoded(existing.addressStored) {
-                // We previously created this list with an encoded address (e.g. https:%2F%2F...).
-                // Fix by creating a new correct list + disabling the broken one.
-                _ = try await secondary.postData(
-                    "/lists",
-                    apiKey: secondary.connection.token,
-                    queryItems: [URLQueryItem(name: "app_sudo", value: "true")],
-                    body: AdlistCreateRequest(address: desired.addressNormalized, type: "block", enabled: desired.enabled, comment: desired.comment, groups: desired.groups)
-                )
-                created += 1
-
-                try await disableList(secondary: secondary, list: existing, reason: "Disabled by PiBar sync (invalid encoded URL)")
-                fixed += 1
-                continue
-            }
-
             if let existingId = existing?.id {
                 _ = try await secondary.putData(
                     "/lists/\(existingId)",
@@ -231,13 +216,96 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
             }
         }
 
-        if disabled > 0 || fixed > 0 {
+        if disabled > 0 {
             var notes: [String] = []
             if disabled > 0 { notes.append("disabled \(disabled) extras") }
-            if fixed > 0 { notes.append("fixed \(fixed) bad URLs") }
             return "Adlists synced: +\(created) ~\(updated) -\(deleted) (\(notes.joined(separator: ", ")))"
         }
         return "Adlists synced: +\(created) ~\(updated) -\(deleted)"
+    }
+
+    private func sanitizeSecondaryPercentEncodedLists(secondary: Pihole6API, lists: [Adlist]) async throws -> [Adlist] {
+        let bad = lists.filter { list in
+            guard looksPercentEncoded(list.addressStored) else { return false }
+            let decoded = list.addressStored.removingPercentEncoding ?? list.addressStored
+            return decoded != list.addressStored
+        }
+
+        if bad.isEmpty {
+            return lists
+        }
+
+        SyncProgress.report("Adlists sync: fixing \(bad.count) invalid encoded adlist URLs on secondary…")
+
+        var deleted = 0
+        var disabled = 0
+        for list in bad {
+            guard let id = list.id else { continue }
+            do {
+                _ = try await secondary.deleteData(
+                    "/lists/\(id)",
+                    apiKey: secondary.connection.token,
+                    queryItems: [
+                        URLQueryItem(name: "type", value: "block"),
+                        URLQueryItem(name: "app_sudo", value: "true"),
+                    ]
+                )
+                deleted += 1
+            } catch let apiError as APIError {
+                switch apiError {
+                case .invalidResponse(statusCode: 404, content: _):
+                    try await disableList(secondary: secondary, list: list, reason: "Disabled by PiBar sync (invalid encoded URL; delete unsupported)")
+                    disabled += 1
+                default:
+                    do {
+                        try await disableList(secondary: secondary, list: list, reason: "Disabled by PiBar sync (invalid encoded URL; delete failed)")
+                        disabled += 1
+                    } catch {
+                        throw apiError
+                    }
+                }
+            }
+        }
+
+        if disabled > 0 {
+            SyncProgress.report("Adlists sync: removed \(deleted) invalid encoded URLs (disabled \(disabled) where delete unsupported).")
+        } else {
+            SyncProgress.report("Adlists sync: removed \(deleted) invalid encoded URLs.")
+        }
+
+        // Exclude them from the local reconcile set so we don't hit duplicate normalized keys.
+        return lists.filter { list in
+            let decoded = list.addressStored.removingPercentEncoding ?? list.addressStored
+            return decoded == list.addressStored || !looksPercentEncoded(list.addressStored)
+        }
+    }
+
+    private func indexByNormalizedAddress(_ lists: [Adlist]) -> [String: Adlist] {
+        var result: [String: Adlist] = [:]
+        for list in lists {
+            let key = list.addressNormalized
+            if let existing = result[key] {
+                result[key] = preferredList(existing: existing, candidate: list)
+            } else {
+                result[key] = list
+            }
+        }
+        return result
+    }
+
+    private func preferredList(existing: Adlist, candidate: Adlist) -> Adlist {
+        // Prefer the one with a non-encoded stored address; then prefer enabled.
+        let existingEncoded = looksPercentEncoded(existing.addressStored)
+        let candidateEncoded = looksPercentEncoded(candidate.addressStored)
+        if existingEncoded != candidateEncoded {
+            return existingEncoded ? candidate : existing
+        }
+        let existingEnabled = existing.enabled ?? true
+        let candidateEnabled = candidate.enabled ?? true
+        if existingEnabled != candidateEnabled {
+            return candidateEnabled ? candidate : existing
+        }
+        return existing
     }
 
     private func fetchAdlists(api: Pihole6API) async throws -> [Adlist] {
