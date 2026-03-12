@@ -16,6 +16,7 @@
 		442F6F872471E8DF008F1101 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 442F6F862471E8DF008F1101 /* Extensions.swift */; };
 		442F6F89247212D2008F1101 /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 442F6F88247212D1008F1101 /* Preferences.swift */; };
 		442F6F8B24721523008F1101 /* PreferencesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 442F6F8A24721523008F1101 /* PreferencesViewController.swift */; };
+		A1B2C3D4E5F60718293A4B5D /* SyncSettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* SyncSettingsViewController.swift */; };
 		4438184E247DE31A009D9B3F /* AboutViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4438184D247DE31A009D9B3F /* AboutViewController.swift */; };
 		44381850247DE41B009D9B3F /* AboutWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4438184F247DE41B009D9B3F /* AboutWindowController.swift */; };
 		447CCB5C2D87FBA200811F7C /* UpdatePiholeV6Operation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 447CCB5B2D87FB9C00811F7C /* UpdatePiholeV6Operation.swift */; };
@@ -58,6 +59,7 @@
 		442F6F862471E8DF008F1101 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		442F6F88247212D1008F1101 /* Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preferences.swift; sourceTree = "<group>"; };
 		442F6F8A24721523008F1101 /* PreferencesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesViewController.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* SyncSettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncSettingsViewController.swift; sourceTree = "<group>"; };
 		4438184D247DE31A009D9B3F /* AboutViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutViewController.swift; sourceTree = "<group>"; };
 		4438184F247DE41B009D9B3F /* AboutWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutWindowController.swift; sourceTree = "<group>"; };
 		447CCB5B2D87FB9C00811F7C /* UpdatePiholeV6Operation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatePiholeV6Operation.swift; sourceTree = "<group>"; };
@@ -138,6 +140,7 @@
 			children = (
 				44E390C82D87ED49002196DC /* PiholeV6SettingsViewController.swift */,
 				442F6F8A24721523008F1101 /* PreferencesViewController.swift */,
+				A1B2C3D4E5F60718293A4B5C /* SyncSettingsViewController.swift */,
 				449395EB2471B1EB00FA0C34 /* PreferencesWindowController.swift */,
 				44B6DAF1247C70F500D364EC /* PiholeSettingsViewController.swift */,
 			);
@@ -332,6 +335,7 @@
 					44FFB092247627B100DCEDEC /* PiBarManager.swift in Sources */,
 					6BCBC60039ED7B671428AF58 /* KeychainCredentialStore.swift in Sources */,
 					442F6F8B24721523008F1101 /* PreferencesViewController.swift in Sources */,
+					A1B2C3D4E5F60718293A4B5D /* SyncSettingsViewController.swift in Sources */,
 					4415D73624747331009E0B31 /* Logging.swift in Sources */,
 					449395E82471AC9D00FA0C34 /* MainMenuController.swift in Sources */,
 				447CCB5C2D87FBA200811F7C /* UpdatePiholeV6Operation.swift in Sources */,
