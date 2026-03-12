@@ -137,6 +137,7 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
         Log.debug("Connections Updated")
         clearSubmenus()
         manager.loadConnections()
+        manager.configureSyncFromPreferences()
         DispatchQueue.main.async {
             self.setupWebAdminMenus()
         }
@@ -191,15 +192,12 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
         }
 
         manager.setPollingRate(to: Preferences.standard.pollingRate)
+        manager.configureSyncFromPreferences()
     }
 
     internal func syncNowRequested() {
-        Log.info("Sync Now requested (Phase 1 placeholder)")
-        // Phase 2+ will route this to a real sync operation.
-        Preferences.standard.set(syncLastRunAt: Date())
-        Preferences.standard.set(syncLastStatus: "skipped")
-        Preferences.standard.set(syncLastMessage: "Sync not implemented yet (Phase 1).")
-        updateInterface()
+        Log.info("Sync Now requested")
+        manager.syncNow()
     }
 
     private func updateInterface() {

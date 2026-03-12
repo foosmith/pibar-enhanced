@@ -316,12 +316,40 @@ class Pihole6API: NSObject {
         }
     }
 
+    private func performData(_ request: URLRequest) async throws -> Data {
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            if let response = response as? HTTPURLResponse,
+               !((200..<300) ~= response.statusCode)
+            {
+                if response.statusCode == 401 {
+                    throw APIError.unauthorized
+                }
+                if response.statusCode == 403 {
+                    throw APIError.forbidden
+                }
+                throw APIError.invalidResponse(
+                    statusCode: response.statusCode,
+                    content: String(describing: String(data: data, encoding: .utf8)))
+            }
+            return data
+        } catch {
+            throw mapError(error)
+        }
+    }
+
     private func get<T: Decodable>(
         _ path: String, responseType: T.Type, apiKey: String? = nil
     ) async throws -> T {
         let url = try makeURL(for: path)
         let request = try request(for: url, apiKey: apiKey)
         return try await perform(request, responseType: T.self)
+    }
+
+    func getData(_ path: String, apiKey: String? = nil) async throws -> Data {
+        let url = try makeURL(for: path)
+        let request = try request(for: url, apiKey: apiKey)
+        return try await performData(request)
     }
 
     private func post<T: Decodable>(

@@ -22,6 +22,12 @@ class PiBarManager: NSObject {
     private var isUpdateInFlight = false
     private var refreshRequested = false
 
+    private let syncStateLock = NSLock()
+    private var isSyncInFlight = false
+    private var syncRequested = false
+    private var syncTimer: Timer?
+    private var syncInterval: TimeInterval = 15 * 60
+
     private var networkOverview: PiholeNetworkOverview {
         didSet {
             delegate?.updateNetwork(networkOverview)
@@ -76,6 +82,29 @@ class PiBarManager: NSObject {
             updateInterval = newPollingRate
             startTimer()
         }
+    }
+
+    func configureSyncFromPreferences() {
+        stopSyncTimer()
+
+        let enabled = Preferences.standard.syncEnabled
+        let minutes = Preferences.standard.syncIntervalMinutes
+        let interval = TimeInterval(minutes) * 60
+        syncInterval = interval
+
+        guard enabled else {
+            return
+        }
+
+        let newTimer = Timer(timeInterval: syncInterval, target: self, selector: #selector(syncDryRunFromTimer), userInfo: nil, repeats: true)
+        newTimer.tolerance = 10
+        RunLoop.main.add(newTimer, forMode: .common)
+        syncTimer = newTimer
+        Log.debug("Manager: Sync Timer Started")
+    }
+
+    func syncNow() {
+        enqueueDryRunSync()
     }
 
     // Enable / Disable Pi-hole(s)
@@ -153,6 +182,14 @@ class PiBarManager: NSObject {
         }
     }
 
+    private func stopSyncTimer() {
+        if let existingTimer = syncTimer {
+            Log.debug("Manager: Sync Timer Stopped")
+            existingTimer.invalidate()
+            syncTimer = nil
+        }
+    }
+
     // MARK: Data Updates
 
     private func createNewNetwork() {
@@ -213,6 +250,7 @@ class PiBarManager: NSObject {
         updatePiholes()
 
         startTimer()
+        configureSyncFromPreferences()
     }
 
     @objc private func updatePiholes() {
@@ -294,6 +332,44 @@ class PiBarManager: NSObject {
             averageBlocklist: networkBlocklist(in: snapshot),
             piholes: snapshot
         )
+    }
+
+    // MARK: - Sync (Phase 2 dry-run)
+
+    @objc private func syncDryRunFromTimer() {
+        enqueueDryRunSync()
+    }
+
+    private func enqueueDryRunSync() {
+        syncStateLock.lock()
+        if isSyncInFlight {
+            syncRequested = true
+            syncStateLock.unlock()
+            return
+        }
+        isSyncInFlight = true
+        syncStateLock.unlock()
+
+        Log.debug("Manager: Enqueuing sync dry-run")
+
+        let operation = SyncPrimarySecondaryDryRunOperation()
+
+        let completion = BlockOperation { [weak self] in
+            guard let self else { return }
+            self.syncStateLock.lock()
+            self.isSyncInFlight = false
+            let shouldRunAgain = self.syncRequested
+            self.syncRequested = false
+            self.syncStateLock.unlock()
+
+            if shouldRunAgain {
+                self.enqueueDryRunSync()
+            }
+        }
+
+        completion.addDependency(operation)
+        operationQueue.addOperation(operation)
+        operationQueue.addOperation(completion)
     }
 
     private func networkTotalQueries(in piholes: [String: Pihole]) -> Int {
