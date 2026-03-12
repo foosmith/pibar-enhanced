@@ -32,7 +32,7 @@ final class SyncSettingsViewController: NSViewController {
     }
 
     override func loadView() {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 720, height: 240))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 760, height: 260))
 
         primaryPopup.translatesAutoresizingMaskIntoConstraints = false
         secondaryPopup.translatesAutoresizingMaskIntoConstraints = false
@@ -47,6 +47,10 @@ final class SyncSettingsViewController: NSViewController {
 
         syncNowButton.bezelStyle = .rounded
         closeButton.bezelStyle = .rounded
+
+        if let cell = syncEnabledCheckbox.cell as? NSButtonCell {
+            cell.lineBreakMode = .byClipping
+        }
 
         syncEnabledCheckbox.target = self
         syncEnabledCheckbox.action = #selector(syncEnabledChanged)
@@ -75,6 +79,8 @@ final class SyncSettingsViewController: NSViewController {
         grid.rowSpacing = 10
         grid.columnSpacing = 12
         grid.xPlacement = .fill
+        grid.column(at: 0).xPlacement = .leading
+        grid.column(at: 1).xPlacement = .fill
 
         primaryPopup.setContentHuggingPriority(.defaultLow, for: .horizontal)
         primaryPopup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -124,8 +130,16 @@ final class SyncSettingsViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Sync Settings"
-        preferredContentSize = NSSize(width: 720, height: 240)
+        preferredContentSize = NSSize(width: 760, height: 260)
         refreshUI()
+    }
+
+    override func viewWillAppear() {
+        super.viewWillAppear()
+        if let window = view.window {
+            window.setContentSize(preferredContentSize)
+            window.minSize = preferredContentSize
+        }
     }
 
     private func displayTitle(for connection: PiholeConnectionV3) -> String {
