@@ -95,6 +95,8 @@ final class SyncSettingsViewController: NSViewController {
             grid.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
             grid.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
 
+            primaryPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 280),
+            secondaryPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 280),
             intervalField.widthAnchor.constraint(equalToConstant: 80),
 
             statusLabel.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 14),
@@ -139,15 +141,12 @@ final class SyncSettingsViewController: NSViewController {
             secondaryPopup.selectItem(withTitle: Preferences.standard.syncSecondaryIdentifier)
         }
 
-        let hasAtLeastOne = identifiers.count >= 1
         let hasAtLeastTwo = identifiers.count >= 2
-
-        primaryPopup.isEnabled = hasAtLeastOne
-        secondaryPopup.isEnabled = hasAtLeastTwo
-        intervalField.isEnabled = true
-
         if !hasAtLeastTwo {
             syncEnabledCheckbox.isEnabled = false
+            primaryPopup.isEnabled = false
+            secondaryPopup.isEnabled = false
+            intervalField.isEnabled = false
             syncNowButton.isEnabled = false
             statusLabel.stringValue = "Sync requires two Pi-hole v6 connections."
             updateStatus()
@@ -155,6 +154,18 @@ final class SyncSettingsViewController: NSViewController {
         }
 
         syncEnabledCheckbox.isEnabled = true
+        let syncEnabled = syncEnabledCheckbox.state == .on
+        primaryPopup.isEnabled = syncEnabled
+        secondaryPopup.isEnabled = syncEnabled
+        intervalField.isEnabled = syncEnabled
+
+        if !syncEnabled {
+            syncNowButton.isEnabled = false
+            statusLabel.stringValue = "Enable Sync to configure Primary/Secondary."
+            updateStatus()
+            return
+        }
+
         validateSelection()
 
         let primary = primaryPopup.titleOfSelectedItem ?? ""
