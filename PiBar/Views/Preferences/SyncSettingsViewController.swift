@@ -27,8 +27,12 @@ final class SyncSettingsViewController: NSViewController {
     private let syncNowButton = NSButton(title: "Sync Now", target: nil, action: nil)
     private let closeButton = NSButton(title: "Close", target: nil, action: nil)
 
+    private var v6Connections: [PiholeConnectionV3] {
+        Preferences.standard.piholes.filter(\.isV6)
+    }
+
     override func loadView() {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 240))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 240))
 
         primaryPopup.translatesAutoresizingMaskIntoConstraints = false
         secondaryPopup.translatesAutoresizingMaskIntoConstraints = false
@@ -103,8 +107,6 @@ final class SyncSettingsViewController: NSViewController {
             grid.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
             grid.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
 
-            primaryPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 460),
-            secondaryPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 460),
             intervalField.widthAnchor.constraint(equalToConstant: 80),
 
             statusLabel.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 14),
@@ -122,34 +124,64 @@ final class SyncSettingsViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Sync Settings"
+        preferredContentSize = NSSize(width: 520, height: 240)
         refreshUI()
     }
 
+    private func displayTitle(for connection: PiholeConnectionV3) -> String {
+        let scheme = connection.useSSL ? "https" : "http"
+        return "\(connection.hostname) (\(scheme):\(connection.port))"
+    }
+
+    private func populatePopups() {
+        primaryPopup.removeAllItems()
+        secondaryPopup.removeAllItems()
+
+        for connection in v6Connections {
+            let title = displayTitle(for: connection)
+            let identifier = connection.identifier
+
+            let primaryItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            primaryItem.representedObject = identifier
+            primaryItem.toolTip = identifier
+            primaryPopup.menu?.addItem(primaryItem)
+
+            let secondaryItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            secondaryItem.representedObject = identifier
+            secondaryItem.toolTip = identifier
+            secondaryPopup.menu?.addItem(secondaryItem)
+        }
+    }
+
+    private func selectPopup(_ popup: NSPopUpButton, identifier: String) {
+        for item in popup.itemArray {
+            if let represented = item.representedObject as? String, represented == identifier {
+                popup.select(item)
+                return
+            }
+        }
+    }
+
+    private func selectedIdentifier(from popup: NSPopUpButton) -> String {
+        popup.selectedItem?.representedObject as? String ?? ""
+    }
+
     private func refreshUI() {
-        let v6Connections = Preferences.standard.piholes.filter(\.isV6)
-        let identifiers = v6Connections.map(\.identifier)
+        let hasAtLeastTwo = v6Connections.count >= 2
 
         syncEnabledCheckbox.state = Preferences.standard.syncEnabled ? .on : .off
 
-        primaryPopup.removeAllItems()
-        secondaryPopup.removeAllItems()
-        primaryPopup.addItems(withTitles: identifiers)
-        secondaryPopup.addItems(withTitles: identifiers)
+        populatePopups()
 
         intervalField.stringValue = "\(Preferences.standard.syncIntervalMinutes)"
 
-        if !Preferences.standard.syncPrimaryIdentifier.isEmpty,
-           identifiers.contains(Preferences.standard.syncPrimaryIdentifier)
-        {
-            primaryPopup.selectItem(withTitle: Preferences.standard.syncPrimaryIdentifier)
+        if !Preferences.standard.syncPrimaryIdentifier.isEmpty {
+            selectPopup(primaryPopup, identifier: Preferences.standard.syncPrimaryIdentifier)
         }
-        if !Preferences.standard.syncSecondaryIdentifier.isEmpty,
-           identifiers.contains(Preferences.standard.syncSecondaryIdentifier)
-        {
-            secondaryPopup.selectItem(withTitle: Preferences.standard.syncSecondaryIdentifier)
+        if !Preferences.standard.syncSecondaryIdentifier.isEmpty {
+            selectPopup(secondaryPopup, identifier: Preferences.standard.syncSecondaryIdentifier)
         }
 
-        let hasAtLeastTwo = identifiers.count >= 2
         if !hasAtLeastTwo {
             syncEnabledCheckbox.isEnabled = false
             primaryPopup.isEnabled = false
@@ -176,8 +208,8 @@ final class SyncSettingsViewController: NSViewController {
 
         validateSelection()
 
-        let primary = primaryPopup.titleOfSelectedItem ?? ""
-        let secondary = secondaryPopup.titleOfSelectedItem ?? ""
+        let primary = selectedIdentifier(from: primaryPopup)
+        let secondary = selectedIdentifier(from: secondaryPopup)
         let selectionValid = !primary.isEmpty && !secondary.isEmpty && primary != secondary
         syncNowButton.isEnabled = selectionValid
 
@@ -185,15 +217,18 @@ final class SyncSettingsViewController: NSViewController {
     }
 
     private func validateSelection() {
-        let primary = primaryPopup.titleOfSelectedItem ?? ""
-        let secondary = secondaryPopup.titleOfSelectedItem ?? ""
+        let primary = selectedIdentifier(from: primaryPopup)
+        let secondary = selectedIdentifier(from: secondaryPopup)
 
         if !primary.isEmpty, primary == secondary, secondaryPopup.numberOfItems > 1 {
-            for item in secondaryPopup.itemArray where item.title != primary {
+            for item in secondaryPopup.itemArray {
+                guard let represented = item.representedObject as? String else { continue }
+                if represented != primary {
                 secondaryPopup.select(item)
                 break
+                }
             }
-            Preferences.standard.set(syncSecondaryIdentifier: secondaryPopup.titleOfSelectedItem ?? "")
+            Preferences.standard.set(syncSecondaryIdentifier: selectedIdentifier(from: secondaryPopup))
         }
     }
 
@@ -213,8 +248,8 @@ final class SyncSettingsViewController: NSViewController {
     private func persistSelections() {
         Preferences.standard.set(syncEnabled: syncEnabledCheckbox.state == .on)
 
-        let primary = primaryPopup.titleOfSelectedItem ?? ""
-        let secondary = secondaryPopup.titleOfSelectedItem ?? ""
+        let primary = selectedIdentifier(from: primaryPopup)
+        let secondary = selectedIdentifier(from: secondaryPopup)
         Preferences.standard.set(syncPrimaryIdentifier: primary)
         Preferences.standard.set(syncSecondaryIdentifier: secondary)
 
