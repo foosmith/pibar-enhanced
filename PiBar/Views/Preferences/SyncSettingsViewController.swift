@@ -28,7 +28,7 @@ final class SyncSettingsViewController: NSViewController {
     private let closeButton = NSButton(title: "Close", target: nil, action: nil)
 
     override func loadView() {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 240))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 240))
 
         primaryPopup.translatesAutoresizingMaskIntoConstraints = false
         secondaryPopup.translatesAutoresizingMaskIntoConstraints = false
@@ -72,6 +72,14 @@ final class SyncSettingsViewController: NSViewController {
         grid.columnSpacing = 12
         grid.xPlacement = .fill
 
+        primaryPopup.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        primaryPopup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        secondaryPopup.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        secondaryPopup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        primaryLabel.setContentHuggingPriority(.required, for: .horizontal)
+        secondaryLabel.setContentHuggingPriority(.required, for: .horizontal)
+        intervalLabel.setContentHuggingPriority(.required, for: .horizontal)
+
         let buttons = NSStackView(views: [syncNowButton, closeButton])
         buttons.orientation = .horizontal
         buttons.spacing = 10
@@ -95,8 +103,8 @@ final class SyncSettingsViewController: NSViewController {
             grid.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
             grid.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
 
-            primaryPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 280),
-            secondaryPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 280),
+            primaryPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 460),
+            secondaryPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 460),
             intervalField.widthAnchor.constraint(equalToConstant: 80),
 
             statusLabel.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 14),
