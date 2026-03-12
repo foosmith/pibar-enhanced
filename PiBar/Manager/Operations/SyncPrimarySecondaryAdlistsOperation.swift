@@ -237,10 +237,39 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
 
         SyncProgress.report("Adlists sync: fixing \(bad.count) invalid encoded adlist URLs on secondary…")
 
+        var fixedInPlace = 0
+        var fixedIdToDecoded: [Int: String] = [:]
         var deleted = 0
         var disabled = 0
         for list in bad {
             guard let id = list.id else { continue }
+            let decoded = list.addressStored.removingPercentEncoding ?? list.addressStored
+
+            // Best option: fix the stored address in-place so the web UI + gravity behave as expected even if
+            // delete isn't supported by this Pi-hole build.
+            do {
+                _ = try await secondary.putData(
+                    "/lists/\(id)",
+                    apiKey: secondary.connection.token,
+                    queryItems: [
+                        URLQueryItem(name: "type", value: "block"),
+                        URLQueryItem(name: "app_sudo", value: "true"),
+                    ],
+                    body: AdlistWriteRequest(
+                        type: "block",
+                        address: decoded,
+                        enabled: false,
+                        comment: "Fixed by PiBar sync (was percent-encoded)",
+                        groups: nil
+                    )
+                )
+                fixedInPlace += 1
+                fixedIdToDecoded[id] = decoded
+                continue
+            } catch {
+                // Fall through to delete/disable.
+            }
+
             do {
                 _ = try await secondary.deleteData(
                     "/lists/\(id)",
@@ -267,16 +296,34 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
             }
         }
 
+        if fixedInPlace > 0 {
+            SyncProgress.report("Adlists sync: fixed \(fixedInPlace) encoded URLs in-place (disabled).")
+        }
         if disabled > 0 {
             SyncProgress.report("Adlists sync: removed \(deleted) invalid encoded URLs (disabled \(disabled) where delete unsupported).")
         } else {
             SyncProgress.report("Adlists sync: removed \(deleted) invalid encoded URLs.")
         }
 
-        // Exclude them from the local reconcile set so we don't hit duplicate normalized keys.
-        return lists.filter { list in
+        // Exclude remaining encoded entries from the local reconcile set so we don't hit duplicate normalized keys.
+        // If we fixed in-place, update the in-memory representation so reconciliation updates that list instead
+        // of creating a duplicate.
+        return lists.compactMap { list in
+            if let id = list.id, let decoded = fixedIdToDecoded[id] {
+                return Adlist(
+                    id: id,
+                    addressStored: decoded,
+                    addressNormalized: decoded,
+                    enabled: false,
+                    comment: list.comment,
+                    groups: list.groups
+                )
+            }
             let decoded = list.addressStored.removingPercentEncoding ?? list.addressStored
-            return decoded == list.addressStored || !looksPercentEncoded(list.addressStored)
+            if decoded != list.addressStored, looksPercentEncoded(list.addressStored) {
+                return nil
+            }
+            return list
         }
     }
 

@@ -301,6 +301,7 @@ final class SyncSettingsViewController: NSViewController {
         guard let userInfo = notification.userInfo else { return }
         guard let message = userInfo[SyncProgress.messageKey] as? String else { return }
         appendLog(message)
+        statusLabel.stringValue = message
     }
 
     private func appendLog(_ line: String) {
