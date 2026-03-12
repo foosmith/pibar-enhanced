@@ -18,6 +18,7 @@
 		442F6F8B24721523008F1101 /* PreferencesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 442F6F8A24721523008F1101 /* PreferencesViewController.swift */; };
 		A1B2C3D4E5F60718293A4B5D /* SyncSettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* SyncSettingsViewController.swift */; };
 		9D4C0B11B5F24B3AAE6E3D25 /* SyncPrimarySecondaryDryRunOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D4C0B11B5F24B3AAE6E3D24 /* SyncPrimarySecondaryDryRunOperation.swift */; };
+		7A2A68B0A3F14B8EA6C4C3D1 /* SyncPrimarySecondaryAdlistsOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2A68B0A3F14B8EA6C4C3D0 /* SyncPrimarySecondaryAdlistsOperation.swift */; };
 		4438184E247DE31A009D9B3F /* AboutViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4438184D247DE31A009D9B3F /* AboutViewController.swift */; };
 		44381850247DE41B009D9B3F /* AboutWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4438184F247DE41B009D9B3F /* AboutWindowController.swift */; };
 		447CCB5C2D87FBA200811F7C /* UpdatePiholeV6Operation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 447CCB5B2D87FB9C00811F7C /* UpdatePiholeV6Operation.swift */; };
@@ -62,6 +63,7 @@
 		442F6F8A24721523008F1101 /* PreferencesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesViewController.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5C /* SyncSettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncSettingsViewController.swift; sourceTree = "<group>"; };
 		9D4C0B11B5F24B3AAE6E3D24 /* SyncPrimarySecondaryDryRunOperation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPrimarySecondaryDryRunOperation.swift; sourceTree = "<group>"; };
+		7A2A68B0A3F14B8EA6C4C3D0 /* SyncPrimarySecondaryAdlistsOperation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPrimarySecondaryAdlistsOperation.swift; sourceTree = "<group>"; };
 		4438184D247DE31A009D9B3F /* AboutViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutViewController.swift; sourceTree = "<group>"; };
 		4438184F247DE41B009D9B3F /* AboutWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutWindowController.swift; sourceTree = "<group>"; };
 		447CCB5B2D87FB9C00811F7C /* UpdatePiholeV6Operation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatePiholeV6Operation.swift; sourceTree = "<group>"; };
@@ -125,6 +127,7 @@
 				441E78AF247E3BC500FBC7A0 /* UpdatePiholeOperation.swift */,
 				441E78B3247E3F9400FBC7A0 /* ChangePiholeStatusOperation.swift */,
 				9D4C0B11B5F24B3AAE6E3D24 /* SyncPrimarySecondaryDryRunOperation.swift */,
+				7A2A68B0A3F14B8EA6C4C3D0 /* SyncPrimarySecondaryAdlistsOperation.swift */,
 			);
 			path = Operations;
 			sourceTree = "<group>";
@@ -343,6 +346,7 @@
 					449395E82471AC9D00FA0C34 /* MainMenuController.swift in Sources */,
 				447CCB5C2D87FBA200811F7C /* UpdatePiholeV6Operation.swift in Sources */,
 				9D4C0B11B5F24B3AAE6E3D25 /* SyncPrimarySecondaryDryRunOperation.swift in Sources */,
+				7A2A68B0A3F14B8EA6C4C3D1 /* SyncPrimarySecondaryAdlistsOperation.swift in Sources */,
 				44E390C42D8785E1002196DC /* Pihole6API.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

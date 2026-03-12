@@ -372,6 +372,44 @@ class PiBarManager: NSObject {
         operationQueue.addOperation(completion)
     }
 
+    // MARK: - Sync (Phase 3 apply adlists)
+
+    func syncAdlistsNow() {
+        enqueueAdlistsSync()
+    }
+
+    private func enqueueAdlistsSync() {
+        syncStateLock.lock()
+        if isSyncInFlight {
+            syncRequested = true
+            syncStateLock.unlock()
+            return
+        }
+        isSyncInFlight = true
+        syncStateLock.unlock()
+
+        Log.debug("Manager: Enqueuing adlists sync")
+
+        let operation = SyncPrimarySecondaryAdlistsOperation()
+
+        let completion = BlockOperation { [weak self] in
+            guard let self else { return }
+            self.syncStateLock.lock()
+            self.isSyncInFlight = false
+            let shouldRunAgain = self.syncRequested
+            self.syncRequested = false
+            self.syncStateLock.unlock()
+
+            if shouldRunAgain {
+                self.enqueueAdlistsSync()
+            }
+        }
+
+        completion.addDependency(operation)
+        operationQueue.addOperation(operation)
+        operationQueue.addOperation(completion)
+    }
+
     private func networkTotalQueries(in piholes: [String: Pihole]) -> Int {
         var queries: Int = 0
         piholes.values.forEach {

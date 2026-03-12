@@ -187,7 +187,7 @@ class Pihole6API: NSObject {
     }
 
     // MARK: - URLs
-    private func makeURL(for endpointPath: String) throws -> URL {
+    private func makeURL(for endpointPath: String, queryItems: [URLQueryItem] = []) throws -> URL {
         var components = URLComponents()
         components.scheme = connection.useSSL ? "https" : "http"
         components.host = connection.hostname
@@ -195,6 +195,9 @@ class Pihole6API: NSObject {
 
         let normalizedEndpointPath = endpointPath.hasPrefix("/") ? endpointPath : "/\(endpointPath)"
         components.path = "\(path)\(normalizedEndpointPath)"
+        if !queryItems.isEmpty {
+            components.queryItems = queryItems
+        }
 
         guard let url = components.url else {
             throw APIError.invalidURL
@@ -346,8 +349,8 @@ class Pihole6API: NSObject {
         return try await perform(request, responseType: T.self)
     }
 
-    func getData(_ path: String, apiKey: String? = nil) async throws -> Data {
-        let url = try makeURL(for: path)
+    func getData(_ path: String, apiKey: String? = nil, queryItems: [URLQueryItem] = []) async throws -> Data {
+        let url = try makeURL(for: path, queryItems: queryItems)
         let request = try request(for: url, apiKey: apiKey)
         return try await performData(request)
     }
@@ -359,6 +362,23 @@ class Pihole6API: NSObject {
         let url = try makeURL(for: path)
         let request = try request(for: url, method: "POST", apiKey: apiKey, body: body)
         return try await perform(request, responseType: T.self)
+    }
+
+    func putData(_ path: String, apiKey: String? = nil, queryItems: [URLQueryItem] = [], body: Encodable? = nil) async throws -> Data {
+        let url = try makeURL(for: path, queryItems: queryItems)
+        let request = try request(for: url, method: "PUT", apiKey: apiKey, body: body)
+        return try await performData(request)
+    }
+
+    func deleteData(_ path: String, apiKey: String? = nil, queryItems: [URLQueryItem] = []) async throws -> Data {
+        let url = try makeURL(for: path, queryItems: queryItems)
+        let request = try request(for: url, method: "DELETE", apiKey: apiKey)
+        return try await performData(request)
+    }
+
+    static func encodePathComponent(_ raw: String) -> String {
+        let allowed = CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))
+        return raw.addingPercentEncoding(withAllowedCharacters: allowed) ?? raw
     }
 
 }

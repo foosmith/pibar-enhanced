@@ -197,7 +197,8 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
 
     internal func syncNowRequested() {
         Log.info("Sync Now requested")
-        manager.syncNow()
+        // Phase 3 starts with apply-mode adlists sync. Domains/groups remain dry-run until later phases.
+        manager.syncAdlistsNow()
     }
 
     private func updateInterface() {
