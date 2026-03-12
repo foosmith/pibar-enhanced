@@ -29,6 +29,7 @@ struct Preferences {
         static let syncPrimaryIdentifier = "syncPrimaryIdentifier"
         static let syncSecondaryIdentifier = "syncSecondaryIdentifier"
         static let syncIntervalMinutes = "syncIntervalMinutes"
+        static let syncWipeSecondaryBeforeSync = "syncWipeSecondaryBeforeSync"
         static let syncLastRunAt = "syncLastRunAt"
         static let syncLastStatus = "syncLastStatus"
         static let syncLastMessage = "syncLastMessage"
@@ -52,6 +53,7 @@ struct Preferences {
             Key.syncPrimaryIdentifier: "",
             Key.syncSecondaryIdentifier: "",
             Key.syncIntervalMinutes: 15,
+            Key.syncWipeSecondaryBeforeSync: false,
             Key.syncLastStatus: "",
             Key.syncLastMessage: "",
         ])
@@ -231,6 +233,14 @@ extension UserDefaults {
 
     func set(syncIntervalMinutes: Int) {
         set(syncIntervalMinutes, for: Preferences.Key.syncIntervalMinutes)
+    }
+
+    var syncWipeSecondaryBeforeSync: Bool {
+        bool(forKey: Preferences.Key.syncWipeSecondaryBeforeSync)
+    }
+
+    func set(syncWipeSecondaryBeforeSync: Bool) {
+        set(syncWipeSecondaryBeforeSync, for: Preferences.Key.syncWipeSecondaryBeforeSync)
     }
 
     var syncLastRunAt: Date? {

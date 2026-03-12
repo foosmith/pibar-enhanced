@@ -64,6 +64,9 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
             let secondaryAPI = Pihole6API(connection: secondaryConnection)
 
             do {
+                if Preferences.standard.syncWipeSecondaryBeforeSync {
+                    try await wipeSecondaryAdlists(secondary: secondaryAPI)
+                }
                 let result = try await syncAdlists(primary: primaryAPI, secondary: secondaryAPI)
                 Preferences.standard.set(syncLastStatus: "success")
                 Preferences.standard.set(syncLastMessage: result)
@@ -262,6 +265,59 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
             let comment = d["comment"] as? String
             let groups = d["groups"] as? [Int] ?? []
             return Adlist(id: id, addressStored: addressStored, addressNormalized: addressNormalized, enabled: enabled, comment: comment, groups: groups)
+        }
+    }
+
+    private func wipeSecondaryAdlists(secondary: Pihole6API) async throws {
+        SyncProgress.report("Pre-clean: wiping secondary adlists…")
+
+        let adlists = try await fetchAdlists(api: secondary)
+        if adlists.isEmpty {
+            SyncProgress.report("Pre-clean: no adlists to wipe.")
+            return
+        }
+
+        var deleted = 0
+        var disabled = 0
+        for list in adlists {
+            guard let id = list.id else { continue }
+            do {
+                // Prefer deletion for a clean slate; fall back to disabling when delete isn't supported.
+                _ = try await secondary.deleteData(
+                    "/lists/\(id)",
+                    apiKey: secondary.connection.token,
+                    queryItems: [
+                        URLQueryItem(name: "type", value: "block"),
+                        URLQueryItem(name: "app_sudo", value: "true"),
+                    ]
+                )
+                deleted += 1
+            } catch let apiError as APIError {
+                switch apiError {
+                case .invalidResponse(statusCode: 404, content: _):
+                    try await disableList(secondary: secondary, list: list, reason: "Disabled by PiBar sync pre-clean (delete unsupported)")
+                    disabled += 1
+                default:
+                    // Try disabling as a best-effort fallback; if that fails too, bubble up.
+                    do {
+                        try await disableList(secondary: secondary, list: list, reason: "Disabled by PiBar sync pre-clean (delete failed)")
+                        disabled += 1
+                    } catch {
+                        throw apiError
+                    }
+                }
+            }
+
+            let processed = deleted + disabled
+            if processed % 50 == 0 {
+                SyncProgress.report("Pre-clean: processed \(processed)/\(adlists.count) adlists…")
+            }
+        }
+
+        if disabled > 0 {
+            SyncProgress.report("Pre-clean: wiped \(deleted) adlists (disabled \(disabled) where delete unsupported).")
+        } else {
+            SyncProgress.report("Pre-clean: wiped \(deleted) adlists.")
         }
     }
 

@@ -22,6 +22,7 @@ final class SyncSettingsViewController: NSViewController {
     private let secondaryPopup = NSPopUpButton()
     private let intervalLabel = NSTextField(labelWithString: "Interval (minutes)")
     private let intervalField = NSTextField()
+    private let wipeSecondaryCheckbox = NSButton(checkboxWithTitle: "Wipe secondary adlists before sync (destructive)", target: nil, action: nil)
     private let statusLabel = NSTextField(labelWithString: "")
     private let logScrollView = NSScrollView()
     private let logTextView = NSTextView()
@@ -39,6 +40,7 @@ final class SyncSettingsViewController: NSViewController {
         primaryPopup.translatesAutoresizingMaskIntoConstraints = false
         secondaryPopup.translatesAutoresizingMaskIntoConstraints = false
         intervalField.translatesAutoresizingMaskIntoConstraints = false
+        wipeSecondaryCheckbox.translatesAutoresizingMaskIntoConstraints = false
         syncEnabledCheckbox.translatesAutoresizingMaskIntoConstraints = false
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         logScrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -67,6 +69,9 @@ final class SyncSettingsViewController: NSViewController {
 
         intervalField.target = self
         intervalField.action = #selector(intervalChanged)
+
+        wipeSecondaryCheckbox.target = self
+        wipeSecondaryCheckbox.action = #selector(wipeSecondaryChanged)
 
         syncNowButton.target = self
         syncNowButton.action = #selector(syncNowPressed)
@@ -116,6 +121,7 @@ final class SyncSettingsViewController: NSViewController {
 
         container.addSubview(syncEnabledCheckbox)
         container.addSubview(grid)
+        container.addSubview(wipeSecondaryCheckbox)
         container.addSubview(statusLabel)
         container.addSubview(logScrollView)
         container.addSubview(buttons)
@@ -131,7 +137,11 @@ final class SyncSettingsViewController: NSViewController {
 
             intervalField.widthAnchor.constraint(equalToConstant: 80),
 
-            statusLabel.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 14),
+            wipeSecondaryCheckbox.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 10),
+            wipeSecondaryCheckbox.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            wipeSecondaryCheckbox.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -20),
+
+            statusLabel.topAnchor.constraint(equalTo: wipeSecondaryCheckbox.bottomAnchor, constant: 10),
             statusLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
             statusLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
 
@@ -210,6 +220,7 @@ final class SyncSettingsViewController: NSViewController {
         let hasAtLeastTwo = v6Connections.count >= 2
 
         syncEnabledCheckbox.state = Preferences.standard.syncEnabled ? .on : .off
+        wipeSecondaryCheckbox.state = Preferences.standard.syncWipeSecondaryBeforeSync ? .on : .off
 
         populatePopups()
 
@@ -238,6 +249,7 @@ final class SyncSettingsViewController: NSViewController {
         primaryPopup.isEnabled = syncEnabled
         secondaryPopup.isEnabled = syncEnabled
         intervalField.isEnabled = syncEnabled
+        wipeSecondaryCheckbox.isEnabled = syncEnabled
 
         if !syncEnabled {
             syncNowButton.isEnabled = false
@@ -303,6 +315,7 @@ final class SyncSettingsViewController: NSViewController {
 
     private func persistSelections() {
         Preferences.standard.set(syncEnabled: syncEnabledCheckbox.state == .on)
+        Preferences.standard.set(syncWipeSecondaryBeforeSync: wipeSecondaryCheckbox.state == .on)
 
         let primary = selectedIdentifier(from: primaryPopup)
         let secondary = selectedIdentifier(from: secondaryPopup)
@@ -338,6 +351,43 @@ final class SyncSettingsViewController: NSViewController {
     @objc private func intervalChanged() {
         persistSelections()
         refreshUI()
+    }
+
+    @objc private func wipeSecondaryChanged() {
+        let wantsEnabled = wipeSecondaryCheckbox.state == .on
+        if wantsEnabled {
+            confirmEnableWipe()
+            return
+        }
+
+        persistSelections()
+        refreshUI()
+    }
+
+    private func confirmEnableWipe() {
+        guard let window = view.window else {
+            persistSelections()
+            refreshUI()
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Enable destructive pre-clean?"
+        alert.informativeText = "Before each sync, PiBar will attempt to delete all adlists on the Secondary Pi-hole (or disable them if deletion isn’t supported), then re-apply adlists from the Primary. This can temporarily reduce blocking on the Secondary until gravity updates."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Enable")
+        alert.addButton(withTitle: "Cancel")
+
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard let self else { return }
+            if response == .alertFirstButtonReturn {
+                self.persistSelections()
+            } else {
+                self.wipeSecondaryCheckbox.state = .off
+                self.persistSelections()
+            }
+            self.refreshUI()
+        }
     }
 
     @objc private func syncNowPressed() {
