@@ -98,6 +98,8 @@ final class SyncSettingsViewController: NSViewController {
 
         statusLabel.lineBreakMode = .byWordWrapping
         statusLabel.maximumNumberOfLines = 3
+        statusLabel.isSelectable = true
+        statusLabel.allowsEditingTextAttributes = true
 
         container.addSubview(syncEnabledCheckbox)
         container.addSubview(grid)
