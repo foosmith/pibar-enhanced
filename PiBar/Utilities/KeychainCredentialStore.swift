@@ -17,12 +17,27 @@ final class KeychainCredentialStore {
     static let shared = KeychainCredentialStore()
 
     private let service: String
+    private let cacheLock = NSLock()
+
+    private enum CachedValue {
+        case value(String)
+        case missing
+    }
+
+    private var cache: [String: CachedValue] = [:]
 
     init(service: String = Bundle.main.bundleIdentifier ?? "net.amiantos.PiBar") {
         self.service = service
     }
 
     func readString(account: String) throws -> String? {
+        if let cached = cachedValue(for: account) {
+            switch cached {
+            case let .value(value): return value
+            case .missing: return nil
+            }
+        }
+
         var query: [String: Any] = baseQuery(account: account)
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         query[kSecReturnData as String] = kCFBooleanTrue
@@ -30,6 +45,7 @@ final class KeychainCredentialStore {
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         if status == errSecItemNotFound {
+            setCachedValue(.missing, for: account)
             return nil
         }
         guard status == errSecSuccess else {
@@ -38,7 +54,13 @@ final class KeychainCredentialStore {
         guard let data = item as? Data else {
             throw KeychainCredentialStoreError.unexpectedData
         }
-        return String(data: data, encoding: .utf8)
+        let value = String(data: data, encoding: .utf8)
+        if let value {
+            setCachedValue(.value(value), for: account)
+        } else {
+            setCachedValue(.missing, for: account)
+        }
+        return value
     }
 
     func upsertString(_ value: String, account: String) throws {
@@ -54,6 +76,7 @@ final class KeychainCredentialStore {
             guard updateStatus == errSecSuccess else {
                 throw KeychainCredentialStoreError.unhandledStatus(updateStatus)
             }
+            setCachedValue(.value(value), for: account)
             return
         }
         if status != errSecItemNotFound {
@@ -66,11 +89,13 @@ final class KeychainCredentialStore {
         guard addStatus == errSecSuccess else {
             throw KeychainCredentialStoreError.unhandledStatus(addStatus)
         }
+        setCachedValue(.value(value), for: account)
     }
 
     func delete(account: String) throws {
         let status = SecItemDelete(baseQuery(account: account) as CFDictionary)
         if status == errSecItemNotFound || status == errSecSuccess {
+            setCachedValue(.missing, for: account)
             return
         }
         throw KeychainCredentialStoreError.unhandledStatus(status)
@@ -84,5 +109,16 @@ final class KeychainCredentialStore {
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
         ]
     }
-}
 
+    private func cachedValue(for account: String) -> CachedValue? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return cache[account]
+    }
+
+    private func setCachedValue(_ value: CachedValue, for account: String) {
+        cacheLock.lock()
+        cache[account] = value
+        cacheLock.unlock()
+    }
+}
