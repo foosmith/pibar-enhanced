@@ -184,6 +184,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
             guard let desired = primaryByAddress[address] else { continue }
             let existing = secondaryByAddress[address]
             let isUpdate = existing != nil
+            let writeAddress = sanitizeWriteAddress(desired.addressNormalized)
 
             if let existingId = existing?.id {
                 _ = try await secondary.putData(
@@ -193,7 +194,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
                         URLQueryItem(name: "type", value: "block"),
                         URLQueryItem(name: "app_sudo", value: "true"),
                     ],
-                    body: AdlistWriteRequest(type: "block", address: desired.addressNormalized, enabled: desired.enabled, comment: desired.comment, groups: desired.groups)
+                    body: AdlistWriteRequest(type: "block", address: writeAddress, enabled: desired.enabled, comment: desired.comment, groups: desired.groups)
                 )
             } else {
                 _ = try await secondary.postData(
@@ -203,7 +204,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
                         URLQueryItem(name: "type", value: "block"),
                         URLQueryItem(name: "app_sudo", value: "true"),
                     ],
-                    body: AdlistCreateRequest(address: desired.addressNormalized, type: "block", enabled: desired.enabled, comment: desired.comment, groups: desired.groups)
+                    body: AdlistCreateRequest(address: writeAddress, type: "block", enabled: desired.enabled, comment: desired.comment, groups: desired.groups)
                 )
             }
 
@@ -247,6 +248,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
         for list in bad {
             guard let id = list.id else { continue }
             let decoded = list.addressStored.removingPercentEncoding ?? list.addressStored
+            let fixed = sanitizeWriteAddress(decoded)
 
             // Best option: fix the stored address in-place so the web UI + gravity behave as expected even if
             // delete isn't supported by this Pi-hole build.
@@ -260,14 +262,14 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
                     ],
                     body: AdlistWriteRequest(
                         type: "block",
-                        address: decoded,
+                        address: fixed,
                         enabled: false,
                         comment: "Fixed by PiBar sync (was percent-encoded)",
                         groups: nil
                     )
                 )
                 fixedInPlace += 1
-                fixedIdToDecoded[id] = decoded
+                fixedIdToDecoded[id] = fixed
                 continue
             } catch {
                 // Fall through to delete/disable.
@@ -454,5 +456,29 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
 
     private func looksPercentEncoded(_ address: String) -> Bool {
         address.contains("%2F") || address.contains("%3A")
+    }
+
+    private func sanitizeWriteAddress(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return trimmed }
+
+        // Pi-hole rejects whitespace in URL/address fields. Normalize any whitespace sequences to %20.
+        var result = ""
+        result.reserveCapacity(trimmed.count)
+
+        var lastWasWhitespace = false
+        for scalar in trimmed.unicodeScalars {
+            if CharacterSet.whitespacesAndNewlines.contains(scalar) {
+                if !lastWasWhitespace {
+                    result.append(contentsOf: "%20")
+                    lastWasWhitespace = true
+                }
+                continue
+            }
+            lastWasWhitespace = false
+            result.unicodeScalars.append(scalar)
+        }
+
+        return result
     }
 }
