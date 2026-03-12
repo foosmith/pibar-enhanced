@@ -85,6 +85,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
     }
 
     private struct Adlist: Hashable {
+        let id: Int?
         let address: String
         let enabled: Bool?
         let comment: String?
@@ -108,11 +109,31 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
 
     private struct BatchDeleteRequest: Encodable {
         let type: String
-        let items: [BatchDeleteItem]
+        let items: [EncodableItem]
     }
 
-    private struct BatchDeleteItem: Encodable {
-        let address: String
+    private struct EncodableItem: Encodable {
+        let id: Int?
+        let address: String?
+        let item: String?
+
+        init(id: Int) {
+            self.id = id
+            address = nil
+            item = nil
+        }
+
+        init(address: String) {
+            id = nil
+            self.address = address
+            item = nil
+        }
+
+        init(item: String) {
+            id = nil
+            address = nil
+            self.item = item
+        }
     }
 
     private func syncAdlists(primary: Pihole6API, secondary: Pihole6API) async throws -> String {
@@ -145,12 +166,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
             } catch let apiError as APIError {
                 // Some versions may not support DELETE for lists; try batchDelete.
                 if case let .invalidResponse(statusCode: status, content: _) = apiError, status == 404 {
-                    _ = try await secondary.postData(
-                        "/lists:batchDelete",
-                        apiKey: secondary.connection.token,
-                        queryItems: [URLQueryItem(name: "app_sudo", value: "true")],
-                        body: BatchDeleteRequest(type: "block", items: [BatchDeleteItem(address: address)])
-                    )
+                    try await batchDeleteAdlist(address: address, secondaryByAddress: secondaryByAddress, secondary: secondary)
                     deleted += 1
                     continue
                 }
@@ -218,11 +234,48 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
             if let type = d["type"] as? String, type != "block" {
                 return nil
             }
+            let id = d["id"] as? Int
             guard let address = d["address"] as? String, !address.isEmpty else { return nil }
             let enabled = d["enabled"] as? Bool
             let comment = d["comment"] as? String
             let groups = d["groups"] as? [Int] ?? []
-            return Adlist(address: address, enabled: enabled, comment: comment, groups: groups)
+            return Adlist(id: id, address: address, enabled: enabled, comment: comment, groups: groups)
+        }
+    }
+
+    private func batchDeleteAdlist(address: String, secondaryByAddress: [String: Adlist], secondary: Pihole6API) async throws {
+        // Prefer deleting by id if available; payload shapes appear to vary across Pi-hole v6 builds.
+        var attempts: [(String, BatchDeleteRequest)] = []
+        if let id = secondaryByAddress[address]?.id {
+            attempts.append(("id", BatchDeleteRequest(type: "block", items: [EncodableItem(id: id)])))
+        }
+        attempts.append(("address", BatchDeleteRequest(type: "block", items: [EncodableItem(address: address)])))
+        attempts.append(("item", BatchDeleteRequest(type: "block", items: [EncodableItem(item: address)])))
+
+        var lastError: APIError?
+        for (label, body) in attempts {
+            do {
+                _ = try await secondary.postData(
+                    "/lists:batchDelete",
+                    apiKey: secondary.connection.token,
+                    queryItems: [URLQueryItem(name: "app_sudo", value: "true")],
+                    body: body
+                )
+                return
+            } catch let apiError as APIError {
+                lastError = apiError
+                if case .invalidResponse(statusCode: 400, content: _) = apiError {
+                    Log.debug("Batch delete attempt failed (\(label))")
+                    continue
+                }
+                throw apiError
+            } catch {
+                throw error
+            }
+        }
+
+        if let lastError {
+            throw lastError
         }
     }
 }
