@@ -28,8 +28,7 @@ final class SyncSettingsViewController: NSViewController {
     private let closeButton = NSButton(title: "Close", target: nil, action: nil)
 
     override func loadView() {
-        let container = NSView()
-        container.translatesAutoresizingMaskIntoConstraints = false
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 240))
 
         primaryPopup.translatesAutoresizingMaskIntoConstraints = false
         secondaryPopup.translatesAutoresizingMaskIntoConstraints = false
@@ -88,8 +87,6 @@ final class SyncSettingsViewController: NSViewController {
         container.addSubview(buttons)
 
         NSLayoutConstraint.activate([
-            container.widthAnchor.constraint(equalToConstant: 460),
-
             syncEnabledCheckbox.topAnchor.constraint(equalTo: container.topAnchor, constant: 20),
             syncEnabledCheckbox.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
             syncEnabledCheckbox.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -20),
@@ -142,19 +139,29 @@ final class SyncSettingsViewController: NSViewController {
             secondaryPopup.selectItem(withTitle: Preferences.standard.syncSecondaryIdentifier)
         }
 
+        let hasAtLeastOne = identifiers.count >= 1
         let hasAtLeastTwo = identifiers.count >= 2
-        primaryPopup.isEnabled = hasAtLeastTwo
+
+        primaryPopup.isEnabled = hasAtLeastOne
         secondaryPopup.isEnabled = hasAtLeastTwo
-        syncEnabledCheckbox.isEnabled = hasAtLeastTwo
-        intervalField.isEnabled = hasAtLeastTwo
-        syncNowButton.isEnabled = hasAtLeastTwo
+        intervalField.isEnabled = true
 
         if !hasAtLeastTwo {
+            syncEnabledCheckbox.isEnabled = false
+            syncNowButton.isEnabled = false
             statusLabel.stringValue = "Sync requires two Pi-hole v6 connections."
+            updateStatus()
             return
         }
 
+        syncEnabledCheckbox.isEnabled = true
         validateSelection()
+
+        let primary = primaryPopup.titleOfSelectedItem ?? ""
+        let secondary = secondaryPopup.titleOfSelectedItem ?? ""
+        let selectionValid = !primary.isEmpty && !secondary.isEmpty && primary != secondary
+        syncNowButton.isEnabled = selectionValid
+
         updateStatus()
     }
 
@@ -233,4 +240,3 @@ final class SyncSettingsViewController: NSViewController {
         dismiss(self)
     }
 }
-

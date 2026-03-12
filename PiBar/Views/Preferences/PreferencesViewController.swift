@@ -234,17 +234,37 @@ class PreferencesViewController: NSViewController {
             return
         }
 
+        guard let saveButton = findSaveAndCloseButton(in: view) else {
+            Log.debug("Sync button: could not find Save & Close button.")
+            return
+        }
+
         let button = NSButton(title: "Sync…", target: self, action: #selector(openSyncSettings))
         button.bezelStyle = .rounded
         button.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(button)
+        saveButton.superview?.addSubview(button)
 
         NSLayoutConstraint.activate([
-            button.centerYAnchor.constraint(equalTo: pollingRateTextField.centerYAnchor),
-            button.leadingAnchor.constraint(equalTo: pollingRateTextField.trailingAnchor, constant: 8),
+            button.centerYAnchor.constraint(equalTo: saveButton.centerYAnchor),
+            button.trailingAnchor.constraint(equalTo: saveButton.leadingAnchor, constant: -8),
         ])
 
         syncSettingsButton = button
+    }
+
+    private func findSaveAndCloseButton(in root: NSView) -> NSButton? {
+        for subview in root.subviews {
+            if let button = subview as? NSButton,
+               button.title == "Save & Close",
+               button.action == #selector(saveAndCloseButtonAction(_:))
+            {
+                return button
+            }
+            if let found = findSaveAndCloseButton(in: subview) {
+                return found
+            }
+        }
+        return nil
     }
 
     @objc private func openSyncSettings() {
