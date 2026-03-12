@@ -199,7 +199,10 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
                 _ = try await secondary.postData(
                     "/lists",
                     apiKey: secondary.connection.token,
-                    queryItems: [URLQueryItem(name: "app_sudo", value: "true")],
+                    queryItems: [
+                        URLQueryItem(name: "type", value: "block"),
+                        URLQueryItem(name: "app_sudo", value: "true"),
+                    ],
                     body: AdlistCreateRequest(address: desired.addressNormalized, type: "block", enabled: desired.enabled, comment: desired.comment, groups: desired.groups)
                 )
             }
