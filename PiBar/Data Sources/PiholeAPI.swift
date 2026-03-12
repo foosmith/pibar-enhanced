@@ -15,11 +15,11 @@ class PiholeAPI: NSObject {
     let connection: PiholeConnectionV3
 
     var identifier: String {
-        return "\(connection.hostname)"
+        return connection.identifier
     }
 
     private let path: String = "/admin/api.php"
-    private let timeout: Int = 2
+    private let requestTimeout: TimeInterval = 5
 
     private enum Endpoints {
         static let summary = PiholeAPIEndpoint(queryParameter: "summaryRaw", authorizationRequired: true)
@@ -49,26 +49,29 @@ class PiholeAPI: NSObject {
         super.init()
     }
 
-    private func get(_ endpoint: PiholeAPIEndpoint, argument: String? = nil, completion: @escaping (String?) -> Void) {
-        var builtURLString = baseURL
+    private func makeURL(for endpoint: PiholeAPIEndpoint, argument: String?) -> URL? {
+        var components = URLComponents()
+        components.scheme = connection.useSSL ? "https" : "http"
+        components.host = connection.hostname
+        components.port = connection.port
+        components.path = path
 
+        var items: [URLQueryItem] = []
         if endpoint.authorizationRequired {
-            builtURLString.append(contentsOf: "?auth=\(connection.token)&\(endpoint.queryParameter)")
-        } else {
-            builtURLString.append(contentsOf: "?\(endpoint.queryParameter)")
+            items.append(URLQueryItem(name: "auth", value: connection.token))
         }
+        items.append(URLQueryItem(name: endpoint.queryParameter, value: argument))
+        components.queryItems = items
 
-        if let argument = argument {
-            builtURLString.append(contentsOf: "=\(argument)")
-        }
+        return components.url
+    }
 
-        Log.debug("Built API String: \(builtURLString)")
-
-        guard let builtURL = URL(string: builtURLString) else { return completion(nil) }
+    private func get(_ endpoint: PiholeAPIEndpoint, argument: String? = nil, completion: @escaping (String?) -> Void) {
+        guard let builtURL = makeURL(for: endpoint, argument: argument) else { return completion(nil) }
 
         var urlRequest = URLRequest(url: builtURL)
         urlRequest.httpMethod = "GET"
-        urlRequest.timeoutInterval = 3
+        urlRequest.timeoutInterval = requestTimeout
         let session = URLSession(configuration: .default)
         let dataTask = session.dataTask(with: urlRequest) { data, response, error in
             if error != nil {
@@ -105,13 +108,13 @@ class PiholeAPI: NSObject {
 
     // MARK: - URLs
 
-    private var baseURL: String {
-        let prefix = connection.useSSL ? "https" : "http"
-        return "\(prefix)://\(connection.hostname):\(connection.port)\(path)"
-    }
-
     var admin: URL {
-        return URL(string: "http://\(connection.hostname):\(connection.port)/admin")!
+        var components = URLComponents()
+        components.scheme = connection.useSSL ? "https" : "http"
+        components.host = connection.hostname
+        components.port = connection.port
+        components.path = "/admin"
+        return components.url!
     }
 
     // MARK: - Testing

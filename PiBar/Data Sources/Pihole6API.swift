@@ -112,6 +112,11 @@ struct Gravity: Decodable {
 
 enum APIError: Error {
     case invalidURL
+    case encodingFailed
+    case unauthorized
+    case forbidden
+    case unreachableHost
+    case notConnectedToInternet
     case requestFailed(Error)
     case invalidResponse(statusCode: Int, content: String)
     case decodingFailed
@@ -157,11 +162,11 @@ class Pihole6API: NSObject {
     let connection: PiholeConnectionV3
 
     var identifier: String {
-        return "\(connection.hostname)"
+        return connection.identifier
     }
 
     private let path: String = "/api"
-    private let timeout: Int = 2
+    private let requestTimeout: TimeInterval = 5
 
     override init() {
         connection = PiholeConnectionV3(
@@ -182,24 +187,34 @@ class Pihole6API: NSObject {
     }
 
     // MARK: - URLs
+    private func makeURL(for endpointPath: String) throws -> URL {
+        var components = URLComponents()
+        components.scheme = connection.useSSL ? "https" : "http"
+        components.host = connection.hostname
+        components.port = connection.port
 
-    private var baseURL: String {
-        let prefix = connection.useSSL ? "https" : "http"
-        return "\(prefix)://\(connection.hostname):\(connection.port)\(path)"
+        let normalizedEndpointPath = endpointPath.hasPrefix("/") ? endpointPath : "/\(endpointPath)"
+        components.path = "\(path)\(normalizedEndpointPath)"
+
+        guard let url = components.url else {
+            throw APIError.invalidURL
+        }
+        return url
     }
     
     var userAgent: String = "PiBar:1.2:https://github.com/amiantos/pibar"
 
     var admin: URL {
-        return URL(string: "http://\(connection.hostname):\(connection.port)/admin")!
+        var components = URLComponents()
+        components.scheme = connection.useSSL ? "https" : "http"
+        components.host = connection.hostname
+        components.port = connection.port
+        components.path = "/admin"
+        return components.url!
     }
     
     func checkPassword(password: String, totp: Int?) async throws -> PiholeV6PasswordResponse {
-        do {
-            return try await post("/auth", responseType: PiholeV6PasswordResponse.self, body: PiholeV6PasswordRequest(password: password, totp: totp))
-        } catch URLError.timedOut {
-            throw APIError.requestTimedOut
-        }
+        return try await post("/auth", responseType: PiholeV6PasswordResponse.self, body: PiholeV6PasswordRequest(password: password, totp: totp))
     }
     
     func fetchSummary() async throws -> Pihole6APISummary {
@@ -231,19 +246,42 @@ class Pihole6API: NSObject {
     private func request(
         for url: URL, method: String = "GET", apiKey: String? = nil,
         body: Encodable? = nil
-    ) -> URLRequest {
+    ) throws -> URLRequest {
         var request = URLRequest(url: url)
         request.httpMethod = method
+        request.timeoutInterval = requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         if let apiKey {
             request.setValue(apiKey, forHTTPHeaderField: "sid")
         }
         if let body {
-            request.httpBody = try? JSONEncoder().encode(body)
-            request.timeoutInterval = 5
+            do {
+                request.httpBody = try JSONEncoder().encode(body)
+            } catch {
+                throw APIError.encodingFailed
+            }
         }
         return request
+    }
+
+    private func mapError(_ error: Error) -> APIError {
+        if let apiError = error as? APIError {
+            return apiError
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut:
+                return .requestTimedOut
+            case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+                return .unreachableHost
+            case .notConnectedToInternet:
+                return .notConnectedToInternet
+            default:
+                return .requestFailed(urlError)
+            }
+        }
+        return .requestFailed(error)
     }
 
     private func perform<T: Decodable>(
@@ -255,10 +293,15 @@ class Pihole6API: NSObject {
             if let response = response as? HTTPURLResponse,
                 !((200..<300) ~= response.statusCode)
             {
+                if response.statusCode == 401 {
+                    throw APIError.unauthorized
+                }
+                if response.statusCode == 403 {
+                    throw APIError.forbidden
+                }
                 throw APIError.invalidResponse(
                     statusCode: response.statusCode,
-                    content: String(
-                        describing: String(data: data, encoding: .utf8)))
+                    content: String(describing: String(data: data, encoding: .utf8)))
             }
             do {
 //                Log.debug(String(data: data, encoding: .utf8) ?? "No data")
@@ -269,34 +312,25 @@ class Pihole6API: NSObject {
                 throw APIError.decodingFailed
             }
         } catch {
-            throw APIError.requestFailed(error)
+            throw mapError(error)
         }
     }
 
     private func get<T: Decodable>(
         _ path: String, responseType: T.Type, apiKey: String? = nil
     ) async throws -> T {
-        do {
-            let request = request(
-                for: URL(string: "\(baseURL)\(path)")!, apiKey: apiKey)
-            return try await perform(request, responseType: T.self)
-        } catch {
-            throw APIError.requestFailed(error)
-        }
+        let url = try makeURL(for: path)
+        let request = try request(for: url, apiKey: apiKey)
+        return try await perform(request, responseType: T.self)
     }
 
     private func post<T: Decodable>(
         _ path: String, responseType: T.Type, apiKey: String? = nil,
         body: Encodable? = nil
     ) async throws -> T {
-        do {
-            let request = request(
-                for: URL(string: "\(baseURL)\(path)")!, method: "POST",
-                apiKey: apiKey, body: body)
-            return try await perform(request, responseType: T.self)
-        } catch {
-            throw APIError.requestFailed(error)
-        }
+        let url = try makeURL(for: path)
+        let request = try request(for: url, method: "POST", apiKey: apiKey, body: body)
+        return try await perform(request, responseType: T.self)
     }
 
 }

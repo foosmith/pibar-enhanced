@@ -17,6 +17,10 @@ protocol PiBarManagerDelegate: AnyObject {
 
 class PiBarManager: NSObject {
     private var piholes: [String: Pihole] = [:]
+    private let piholesLock = NSLock()
+    private let updateStateLock = NSLock()
+    private var isUpdateInFlight = false
+    private var refreshRequested = false
 
     private var networkOverview: PiholeNetworkOverview {
         didSet {
@@ -29,8 +33,13 @@ class PiBarManager: NSObject {
     private let operationQueue: OperationQueue = OperationQueue()
 
     override init() {
+        #if DEBUG
         Log.logLevel = .debug
         Log.useEmoji = true
+        #else
+        Log.logLevel = .off
+        Log.useEmoji = false
+        #endif
 
         operationQueue.maxConcurrentOperationCount = 1
 
@@ -72,9 +81,14 @@ class PiBarManager: NSObject {
     // Enable / Disable Pi-hole(s)
 
     func toggleNetwork() {
-        if networkStatus() == .enabled || networkStatus() == .partiallyEnabled {
+        piholesLock.lock()
+        let snapshot = piholes
+        piholesLock.unlock()
+        let status = networkStatus(in: snapshot)
+
+        if status == .enabled || status == .partiallyEnabled {
             disableNetwork()
-        } else if networkStatus() == .disabled {
+        } else if status == .disabled {
             enableNetwork()
         }
     }
@@ -86,7 +100,10 @@ class PiBarManager: NSObject {
             self.updatePiholes()
             self.startTimer()
         }
-        piholes.values.forEach { pihole in
+        piholesLock.lock()
+        let snapshot = Array(piholes.values)
+        piholesLock.unlock()
+        snapshot.forEach { pihole in
             let operation = ChangePiholeStatusOperation(pihole: pihole, status: .disable, seconds: seconds)
             completionOperation.addDependency(operation)
             operationQueue.addOperation(operation)
@@ -101,7 +118,10 @@ class PiBarManager: NSObject {
             self.updatePiholes()
             self.startTimer()
         }
-        piholes.values.forEach { pihole in
+        piholesLock.lock()
+        let snapshot = Array(piholes.values)
+        piholesLock.unlock()
+        snapshot.forEach { pihole in
             let operation = ChangePiholeStatusOperation(pihole: pihole, status: .enable)
             completionOperation.addDependency(operation)
             operationQueue.addOperation(operation)
@@ -151,13 +171,16 @@ class PiBarManager: NSObject {
         Log.debug("Manager: Updating Connections")
 
         stopTimer()
+        piholesLock.lock()
         piholes.removeAll()
+        piholesLock.unlock()
         createNewNetwork()
         
         for connection in connections {
             Log.debug("Manager: Updating Connection: \(connection.hostname)")
             if connection.isV6 {
                 let api = Pihole6API(connection: connection)
+                piholesLock.lock()
                 piholes[api.identifier] = Pihole(
                     api: nil,
                     api6: api,
@@ -168,8 +191,10 @@ class PiBarManager: NSObject {
                     enabled: nil,
                     isV6: true
                 )
+                piholesLock.unlock()
             } else {
                 let api = PiholeAPI(connection: connection)
+                piholesLock.lock()
                 piholes[api.identifier] = Pihole(
                     api: api,
                     api6: nil,
@@ -180,6 +205,7 @@ class PiBarManager: NSObject {
                     enabled: nil,
                     isV6: false
                 )
+                piholesLock.unlock()
                     
             }
         }
@@ -190,31 +216,62 @@ class PiBarManager: NSObject {
     }
 
     @objc private func updatePiholes() {
+        updateStateLock.lock()
+        if isUpdateInFlight {
+            refreshRequested = true
+            updateStateLock.unlock()
+            return
+        }
+        isUpdateInFlight = true
+        updateStateLock.unlock()
+
         Log.debug("Manager: Updating Pi-holes")
 
-        let completionOperation = BlockOperation {
-            // If we don't sleep here we run into some weird timing issues with dictionaries
-            sleep(1)
+        var v6Operations: [UpdatePiholeV6Operation] = []
+        var legacyOperations: [UpdatePiholeOperation] = []
+
+        let completionOperation = BlockOperation { [weak self] in
+            guard let self else { return }
+
+            self.piholesLock.lock()
+            for operation in v6Operations {
+                self.piholes[operation.pihole.identifier] = operation.pihole
+            }
+            for operation in legacyOperations {
+                self.piholes[operation.pihole.identifier] = operation.pihole
+            }
+            self.piholesLock.unlock()
+
             self.updateNetworkOverview()
+
+            self.updateStateLock.lock()
+            self.isUpdateInFlight = false
+            let shouldRefreshAgain = self.refreshRequested
+            self.refreshRequested = false
+            self.updateStateLock.unlock()
+
+            if shouldRefreshAgain {
+                self.updatePiholes()
+            }
         }
 
-        for pihole in piholes.values {
+        piholesLock.lock()
+        let snapshot = Array(piholes.values)
+        piholesLock.unlock()
+
+        for pihole in snapshot {
             if pihole.isV6 {
                 Log.debug("Creating operation for \(pihole.identifier)")
                 let operation = UpdatePiholeV6Operation(pihole)
-                operation.completionBlock = { [unowned operation] in
-                    self.piholes[pihole.identifier] = operation.pihole
-                }
                 completionOperation.addDependency(operation)
                 operationQueue.addOperation(operation)
+                v6Operations.append(operation)
             } else {
                 Log.debug("Creating operation for \(pihole.identifier)")
                 let operation = UpdatePiholeOperation(pihole)
-                operation.completionBlock = { [unowned operation] in
-                    self.piholes[pihole.identifier] = operation.pihole
-                }
                 completionOperation.addDependency(operation)
                 operationQueue.addOperation(operation)
+                legacyOperations.append(operation)
             }
         }
 
@@ -224,18 +281,22 @@ class PiBarManager: NSObject {
     private func updateNetworkOverview() {
         Log.debug("Updating Network Overview")
 
+        piholesLock.lock()
+        let snapshot = piholes
+        piholesLock.unlock()
+
         networkOverview = PiholeNetworkOverview(
-            networkStatus: networkStatus(),
-            canBeManaged: canManage(),
-            totalQueriesToday: networkTotalQueries(),
-            adsBlockedToday: networkBlockedQueries(),
-            adsPercentageToday: networkPercentageBlocked(),
-            averageBlocklist: networkBlocklist(),
-            piholes: piholes
+            networkStatus: networkStatus(in: snapshot),
+            canBeManaged: canManage(in: snapshot),
+            totalQueriesToday: networkTotalQueries(in: snapshot),
+            adsBlockedToday: networkBlockedQueries(in: snapshot),
+            adsPercentageToday: networkPercentageBlocked(in: snapshot),
+            averageBlocklist: networkBlocklist(in: snapshot),
+            piholes: snapshot
         )
     }
 
-    private func networkTotalQueries() -> Int {
+    private func networkTotalQueries(in piholes: [String: Pihole]) -> Int {
         var queries: Int = 0
         piholes.values.forEach {
             queries += $0.summary?.dnsQueriesToday ?? 0
@@ -243,7 +304,7 @@ class PiBarManager: NSObject {
         return queries
     }
 
-    private func networkBlockedQueries() -> Int {
+    private func networkBlockedQueries(in piholes: [String: Pihole]) -> Int {
         var queries: Int = 0
         piholes.values.forEach {
             queries += $0.summary?.adsBlockedToday ?? 0
@@ -251,16 +312,16 @@ class PiBarManager: NSObject {
         return queries
     }
 
-    private func networkPercentageBlocked() -> Double {
-        let totalQueries = networkTotalQueries()
-        let blockedQueries = networkBlockedQueries()
+    private func networkPercentageBlocked(in piholes: [String: Pihole]) -> Double {
+        let totalQueries = networkTotalQueries(in: piholes)
+        let blockedQueries = networkBlockedQueries(in: piholes)
         if totalQueries == 0 || blockedQueries == 0 {
             return 0.0
         }
         return Double(blockedQueries) / Double(totalQueries) * 100.0
     }
 
-    private func networkBlocklist() -> Int {
+    private func networkBlocklist(in piholes: [String: Pihole]) -> Int {
         var blocklistCounts: [Int] = []
         piholes.values.forEach {
             blocklistCounts.append($0.summary?.domainsBeingBlocked ?? 0)
@@ -268,7 +329,7 @@ class PiBarManager: NSObject {
         return blocklistCounts.average()
     }
 
-    private func networkStatus() -> PiholeNetworkStatus {
+    private func networkStatus(in piholes: [String: Pihole]) -> PiholeNetworkStatus {
         var summaries: [PiholeAPISummary] = []
         piholes.values.forEach {
             if let summary = $0.summary { summaries.append(summary) }
@@ -298,7 +359,7 @@ class PiBarManager: NSObject {
         }
     }
 
-    private func canManage() -> Bool {
+    private func canManage(in piholes: [String: Pihole]) -> Bool {
         for pihole in piholes.values where pihole.canBeManaged ?? false {
             return true
         }

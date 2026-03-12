@@ -30,9 +30,10 @@
 		44E390C22D877DDE002196DC /* HotKey in Frameworks */ = {isa = PBXBuildFile; productRef = 44E390C12D877DDE002196DC /* HotKey */; };
 		44E390C42D8785E1002196DC /* Pihole6API.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44E390C32D8785E1002196DC /* Pihole6API.swift */; };
 		44E390C72D87C3E2002196DC /* LaunchAtLogin in Frameworks */ = {isa = PBXBuildFile; productRef = 44E390C62D87C3E2002196DC /* LaunchAtLogin */; };
-		44E390C92D87ED53002196DC /* PiholeV6SettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44E390C82D87ED49002196DC /* PiholeV6SettingsViewController.swift */; };
-		44FFB092247627B100DCEDEC /* PiBarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44FFB091247627B100DCEDEC /* PiBarManager.swift */; };
-/* End PBXBuildFile section */
+			44E390C92D87ED53002196DC /* PiholeV6SettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44E390C82D87ED49002196DC /* PiholeV6SettingsViewController.swift */; };
+			44FFB092247627B100DCEDEC /* PiBarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44FFB091247627B100DCEDEC /* PiBarManager.swift */; };
+			6BCBC60039ED7B671428AF58 /* KeychainCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97640447AAFC7CAE87C622B0 /* KeychainCredentialStore.swift */; };
+	/* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		441E78AB247E21DE00FBC7A0 /* Embed Frameworks */ = {
@@ -72,9 +73,10 @@
 		449395ED2471C47F00FA0C34 /* PiholeAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiholeAPI.swift; sourceTree = "<group>"; };
 		44B6DAF1247C70F500D364EC /* PiholeSettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiholeSettingsViewController.swift; sourceTree = "<group>"; };
 		44E390C32D8785E1002196DC /* Pihole6API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pihole6API.swift; sourceTree = "<group>"; };
-		44E390C82D87ED49002196DC /* PiholeV6SettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiholeV6SettingsViewController.swift; sourceTree = "<group>"; };
-		44FFB091247627B100DCEDEC /* PiBarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiBarManager.swift; sourceTree = "<group>"; };
-/* End PBXFileReference section */
+			44E390C82D87ED49002196DC /* PiholeV6SettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiholeV6SettingsViewController.swift; sourceTree = "<group>"; };
+			44FFB091247627B100DCEDEC /* PiBarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiBarManager.swift; sourceTree = "<group>"; };
+			97640447AAFC7CAE87C622B0 /* KeychainCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainCredentialStore.swift; sourceTree = "<group>"; };
+	/* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		449395CF2471ABD600FA0C34 /* Frameworks */ = {
@@ -193,15 +195,16 @@
 			path = "Main Menu";
 			sourceTree = "<group>";
 		};
-		44AC125F2476F1F300851ED9 /* Utilities */ = {
-			isa = PBXGroup;
-			children = (
-				442F6F862471E8DF008F1101 /* Extensions.swift */,
-				4415D73524747331009E0B31 /* Logging.swift */,
-			);
-			path = Utilities;
-			sourceTree = "<group>";
-		};
+			44AC125F2476F1F300851ED9 /* Utilities */ = {
+				isa = PBXGroup;
+				children = (
+					442F6F862471E8DF008F1101 /* Extensions.swift */,
+					97640447AAFC7CAE87C622B0 /* KeychainCredentialStore.swift */,
+					4415D73524747331009E0B31 /* Logging.swift */,
+				);
+				path = Utilities;
+				sourceTree = "<group>";
+			};
 		913B94517DDE1EF8E0C98FB2 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -309,10 +312,10 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		449395CE2471ABD600FA0C34 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
+			449395CE2471ABD600FA0C34 /* Sources */ = {
+				isa = PBXSourcesBuildPhase;
+				buildActionMask = 2147483647;
+				files = (
 				4415D73424731FE0009E0B31 /* Structs.swift in Sources */,
 				442F6F89247212D2008F1101 /* Preferences.swift in Sources */,
 				442F6F872471E8DF008F1101 /* Extensions.swift in Sources */,
@@ -325,11 +328,12 @@
 				449395EE2471C47F00FA0C34 /* PiholeAPI.swift in Sources */,
 				4438184E247DE31A009D9B3F /* AboutViewController.swift in Sources */,
 				449395D62471ABD600FA0C34 /* AppDelegate.swift in Sources */,
-				44E390C92D87ED53002196DC /* PiholeV6SettingsViewController.swift in Sources */,
-				44FFB092247627B100DCEDEC /* PiBarManager.swift in Sources */,
-				442F6F8B24721523008F1101 /* PreferencesViewController.swift in Sources */,
-				4415D73624747331009E0B31 /* Logging.swift in Sources */,
-				449395E82471AC9D00FA0C34 /* MainMenuController.swift in Sources */,
+					44E390C92D87ED53002196DC /* PiholeV6SettingsViewController.swift in Sources */,
+					44FFB092247627B100DCEDEC /* PiBarManager.swift in Sources */,
+					6BCBC60039ED7B671428AF58 /* KeychainCredentialStore.swift in Sources */,
+					442F6F8B24721523008F1101 /* PreferencesViewController.swift in Sources */,
+					4415D73624747331009E0B31 /* Logging.swift in Sources */,
+					449395E82471AC9D00FA0C34 /* MainMenuController.swift in Sources */,
 				447CCB5C2D87FBA200811F7C /* UpdatePiholeV6Operation.swift in Sources */,
 				44E390C42D8785E1002196DC /* Pihole6API.swift in Sources */,
 			);
@@ -481,7 +485,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 682;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = 2Y9M69QJKZ;
+				DEVELOPMENT_TEAM = GB7Z2TZ8LT;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
@@ -492,7 +496,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.15;
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = net.amiantos.PiBar;
+				PRODUCT_BUNDLE_IDENTIFIER = com.foo.PiBarEnhanced;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 			};
@@ -509,7 +513,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 682;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = 2Y9M69QJKZ;
+				DEVELOPMENT_TEAM = GB7Z2TZ8LT;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
@@ -520,7 +524,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.15;
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = net.amiantos.PiBar;
+				PRODUCT_BUNDLE_IDENTIFIER = com.foo.PiBarEnhanced;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 			};

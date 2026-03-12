@@ -50,7 +50,7 @@ extension UserDefaults {
             // Migrate from PiBar v1.1 format to PiBar v1.2 format if needed
             Log.debug("Found V1 Pi-holes")
             var piholesV2: [PiholeConnectionV2] = []
-            var piholesV3: [PiholeConnectionV3] = []
+            var piholesV3Tokenless: [PiholeConnectionV3] = []
             for data in array {
                 Log.debug("Loading Pi-hole V2...")
                 guard let data = data as? Data, let piholeConnection = PiholeConnectionV2(data: data) else { continue }
@@ -59,28 +59,62 @@ extension UserDefaults {
             if !piholesV2.isEmpty {
                 for pihole in piholesV2 {
                     Log.debug("Converting V2 Pi-hole to V3")
-                    piholesV3.append(PiholeConnectionV3(hostname: pihole.hostname, port: pihole.port, useSSL: pihole.useSSL, token: pihole.token, passwordProtected: pihole.passwordProtected, adminPanelURL: pihole.adminPanelURL, isV6: false))
+                    let connection = PiholeConnectionV3(
+                        hostname: pihole.hostname,
+                        port: pihole.port,
+                        useSSL: pihole.useSSL,
+                        token: "",
+                        passwordProtected: pihole.passwordProtected,
+                        adminPanelURL: pihole.adminPanelURL,
+                        isV6: false
+                    )
+                    if !pihole.token.isEmpty {
+                        do {
+                            try KeychainCredentialStore.shared.upsertString(pihole.token, account: connection.identifier)
+                        } catch {
+                            Log.error(error)
+                        }
+                    }
+                    piholesV3Tokenless.append(connection)
                 }
                 set([], for: Preferences.Key.piholesV2)
-                let encodedArray = piholesV3.map { $0.encode()! }
+                let encodedArray = piholesV3Tokenless.map { $0.encode()! }
                 set(encodedArray, for: Preferences.Key.piholesV3)
             }
-            return piholesV3
+            return loadPiholesV3WithKeychain()
         } else if let array = array(forKey: Preferences.Key.piholesV3), !array.isEmpty {
-            var piholesV3: [PiholeConnectionV3] = []
-            for data in array {
-                Log.debug("Loading V3 Pi-hole")
-                guard let data = data as? Data, let piholeConnection = PiholeConnectionV3(data: data) else { continue }
-                piholesV3.append(piholeConnection)
-            }
-            return piholesV3
+            return loadPiholesV3WithKeychain()
         }
         return []
     }
 
     func set(piholes: [PiholeConnectionV3]) {
-        let array = piholes.map { $0.encode()! }
-        set(array, for: Preferences.Key.piholesV3)
+        let existingTokenless = loadPiholesV3TokenlessFromDefaults()
+
+        let newIdentifiers = Set(piholes.map(\.identifier))
+        let removedConnections = existingTokenless.filter { !newIdentifiers.contains($0.identifier) }
+        for connection in removedConnections {
+            do {
+                try KeychainCredentialStore.shared.delete(account: connection.identifier)
+            } catch {
+                Log.error(error)
+            }
+        }
+
+        for connection in piholes {
+            do {
+                if connection.token.isEmpty {
+                    try KeychainCredentialStore.shared.delete(account: connection.identifier)
+                } else {
+                    try KeychainCredentialStore.shared.upsertString(connection.token, account: connection.identifier)
+                }
+            } catch {
+                Log.error(error)
+            }
+        }
+
+        let tokenlessPiholes = piholes.map { $0.replacingToken("") }
+        persistPiholesV3Tokenless(tokenlessPiholes)
     }
 
     var showBlocked: Bool {
@@ -148,6 +182,54 @@ extension UserDefaults {
 
     var showTitle: Bool {
         return showQueries || showBlocked || showPercentage
+    }
+
+    private func loadPiholesV3WithKeychain() -> [PiholeConnectionV3] {
+        let stored = loadPiholesV3TokenlessFromDefaults()
+        var needsResave = false
+        var results: [PiholeConnectionV3] = []
+
+        for raw in stored {
+            if !raw.token.isEmpty {
+                needsResave = true
+                do {
+                    try KeychainCredentialStore.shared.upsertString(raw.token, account: raw.identifier)
+                } catch {
+                    Log.error(error)
+                }
+            }
+
+            let keychainToken: String
+            do {
+                keychainToken = try KeychainCredentialStore.shared.readString(account: raw.identifier) ?? raw.token
+            } catch {
+                Log.error(error)
+                keychainToken = raw.token
+            }
+            results.append(raw.replacingToken(keychainToken))
+        }
+
+        if needsResave {
+            persistPiholesV3Tokenless(stored.map { $0.replacingToken("") })
+        }
+
+        return results
+    }
+
+    private func loadPiholesV3TokenlessFromDefaults() -> [PiholeConnectionV3] {
+        guard let array = array(forKey: Preferences.Key.piholesV3), !array.isEmpty else { return [] }
+        var piholesV3: [PiholeConnectionV3] = []
+        for data in array {
+            Log.debug("Loading V3 Pi-hole")
+            guard let data = data as? Data, let piholeConnection = PiholeConnectionV3(data: data) else { continue }
+            piholesV3.append(piholeConnection)
+        }
+        return piholesV3
+    }
+
+    private func persistPiholesV3Tokenless(_ piholes: [PiholeConnectionV3]) {
+        let array = piholes.map { $0.encode()! }
+        set(array, for: Preferences.Key.piholesV3)
     }
 }
 

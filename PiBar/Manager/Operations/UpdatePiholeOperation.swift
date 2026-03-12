@@ -20,7 +20,23 @@ final class UpdatePiholeOperation: AsyncOperation, @unchecked Sendable {
 
     override func main() {
         Log.debug("Updating Pi-hole: \(pihole.identifier)")
-        pihole.api!.fetchSummary { summary in
+        guard let api = pihole.api else {
+            pihole = Pihole(
+                api: nil,
+                api6: nil,
+                identifier: pihole.identifier,
+                online: false,
+                summary: nil,
+                canBeManaged: false,
+                enabled: nil,
+                isV6: false
+            )
+            state = .isFinished
+            return
+        }
+
+        api.fetchSummary { [weak self] summary in
+            guard let self else { return }
             Log.debug("Received Summary for \(self.pihole.identifier)")
             var enabled: Bool? = true
             var online = true
@@ -30,7 +46,7 @@ final class UpdatePiholeOperation: AsyncOperation, @unchecked Sendable {
                 if summary.status != "enabled" {
                     enabled = false
                 }
-                if !self.pihole.api!.connection.token.isEmpty || !self.pihole.api!.connection.passwordProtected {
+                if !api.connection.token.isEmpty || !api.connection.passwordProtected {
                     canBeManaged = true
                 }
             } else {
@@ -40,9 +56,9 @@ final class UpdatePiholeOperation: AsyncOperation, @unchecked Sendable {
             }
 
             let updatedPihole: Pihole = Pihole(
-                api: self.pihole.api!,
+                api: api,
                 api6: nil,
-                identifier: self.pihole.api!.identifier,
+                identifier: api.identifier,
                 online: online,
                 summary: summary,
                 canBeManaged: canBeManaged,
