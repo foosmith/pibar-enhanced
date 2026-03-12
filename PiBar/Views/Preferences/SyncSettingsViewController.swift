@@ -32,7 +32,7 @@ final class SyncSettingsViewController: NSViewController {
     }
 
     override func loadView() {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 240))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 720, height: 240))
 
         primaryPopup.translatesAutoresizingMaskIntoConstraints = false
         secondaryPopup.translatesAutoresizingMaskIntoConstraints = false
@@ -124,7 +124,7 @@ final class SyncSettingsViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Sync Settings"
-        preferredContentSize = NSSize(width: 520, height: 240)
+        preferredContentSize = NSSize(width: 720, height: 240)
         refreshUI()
     }
 
