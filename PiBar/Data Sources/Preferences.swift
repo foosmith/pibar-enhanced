@@ -23,6 +23,7 @@ struct Preferences {
         static let verboseLabels = "verboseLabels"
         static let shortcutEnabled = "shortcutEnabled"
         static let pollingRate = "pollingRate"
+        static let didMigrateLegacyDefaults = "didMigrateLegacyDefaults"
 
         // Primary -> Secondary Sync (Pi-hole v6)
         static let syncEnabled = "syncEnabled"
@@ -34,6 +35,12 @@ struct Preferences {
         static let syncLastStatus = "syncLastStatus"
         static let syncLastMessage = "syncLastMessage"
     }
+
+    private static let migrationLock = NSLock()
+    private static let legacyPreferenceDomains = [
+        // Original upstream PiBar bundle id (used by older installs).
+        "net.amiantos.PiBar",
+    ]
 
     static var standard: UserDefaults {
         let database = UserDefaults.standard
@@ -48,6 +55,7 @@ struct Preferences {
             Key.verboseLabels: false,
             Key.shortcutEnabled: true,
             Key.pollingRate: 3,
+            Key.didMigrateLegacyDefaults: false,
 
             Key.syncEnabled: false,
             Key.syncPrimaryIdentifier: "",
@@ -58,7 +66,62 @@ struct Preferences {
             Key.syncLastMessage: "",
         ])
 
+        migrateLegacyDefaultsIfNeeded(database: database)
         return database
+    }
+
+    private static func migrateLegacyDefaultsIfNeeded(database: UserDefaults) {
+        migrationLock.lock()
+        defer { migrationLock.unlock() }
+
+        if database.bool(forKey: Key.didMigrateLegacyDefaults) {
+            return
+        }
+
+        let hasAnyPiholes: Bool = {
+            let v3 = database.array(forKey: Key.piholesV3) ?? []
+            let v2 = database.array(forKey: Key.piholesV2) ?? []
+            let v1 = database.array(forKey: Key.piholes) ?? []
+            return !(v3.isEmpty && v2.isEmpty && v1.isEmpty)
+        }()
+
+        if hasAnyPiholes {
+            database.set(true, forKey: Key.didMigrateLegacyDefaults)
+            database.synchronize()
+            return
+        }
+
+        for domain in legacyPreferenceDomains {
+            guard let legacy = UserDefaults.standard.persistentDomain(forName: domain) else { continue }
+
+            let legacyV3 = legacy[Key.piholesV3] as? [Any] ?? []
+            let legacyV2 = legacy[Key.piholesV2] as? [Any] ?? []
+            let legacyV1 = legacy[Key.piholes] as? [Any] ?? []
+
+            guard !(legacyV3.isEmpty && legacyV2.isEmpty && legacyV1.isEmpty) else { continue }
+
+            if !legacyV3.isEmpty {
+                database.set(legacyV3, forKey: Key.piholesV3)
+            } else if !legacyV2.isEmpty {
+                database.set(legacyV2, forKey: Key.piholesV2)
+            } else if !legacyV1.isEmpty {
+                database.set(legacyV1, forKey: Key.piholes)
+            }
+
+            if let value = legacy[Key.showBlocked] { database.set(value, forKey: Key.showBlocked) }
+            if let value = legacy[Key.showQueries] { database.set(value, forKey: Key.showQueries) }
+            if let value = legacy[Key.showPercentage] { database.set(value, forKey: Key.showPercentage) }
+            if let value = legacy[Key.showLabels] { database.set(value, forKey: Key.showLabels) }
+            if let value = legacy[Key.verboseLabels] { database.set(value, forKey: Key.verboseLabels) }
+            if let value = legacy[Key.shortcutEnabled] { database.set(value, forKey: Key.shortcutEnabled) }
+            if let value = legacy[Key.pollingRate] { database.set(value, forKey: Key.pollingRate) }
+
+            Log.debug("Migrated legacy defaults from \(domain)")
+            break
+        }
+
+        database.set(true, forKey: Key.didMigrateLegacyDefaults)
+        database.synchronize()
     }
 }
 
