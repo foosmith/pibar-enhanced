@@ -16,6 +16,7 @@ import LaunchAtLogin
 protocol PreferencesDelegate: AnyObject {
     func updatedPreferences()
     func updatedConnections()
+    func syncNowRequested()
 }
 
 class PreferencesViewController: NSViewController {
@@ -38,6 +39,9 @@ class PreferencesViewController: NSViewController {
         }
         return controller
     }()
+
+    private var syncSettingsController: SyncSettingsViewController?
+    private var syncSettingsButton: NSButton?
 
     // MARK: - Outlets
 
@@ -164,6 +168,7 @@ class PreferencesViewController: NSViewController {
         shortcutEnabledCheckbox.toolTip = "This shortcut allows you to easily enable and disable your Pi-hole(s)"
 
         pollingRateTextField.toolTip = "Polling rate cannot be less than 3 seconds"
+        installSyncSettingsButton()
     }
 
     func updateUI() {
@@ -222,6 +227,46 @@ class PreferencesViewController: NSViewController {
         delegate?.updatedPreferences()
 
         updateUI()
+    }
+
+    private func installSyncSettingsButton() {
+        if syncSettingsButton != nil {
+            return
+        }
+
+        let button = NSButton(title: "Sync…", target: self, action: #selector(openSyncSettings))
+        button.bezelStyle = .rounded
+        button.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(button)
+
+        NSLayoutConstraint.activate([
+            button.centerYAnchor.constraint(equalTo: pollingRateTextField.centerYAnchor),
+            button.leadingAnchor.constraint(equalTo: pollingRateTextField.trailingAnchor, constant: 8),
+        ])
+
+        syncSettingsButton = button
+    }
+
+    @objc private func openSyncSettings() {
+        if syncSettingsController == nil {
+            let controller = SyncSettingsViewController()
+            controller.delegate = self
+            syncSettingsController = controller
+        }
+
+        if let controller = syncSettingsController {
+            presentAsSheet(controller)
+        }
+    }
+}
+
+extension PreferencesViewController: SyncSettingsViewControllerDelegate {
+    func syncSettingsUpdated() {
+        delegate?.updatedPreferences()
+    }
+
+    func syncNowRequestedFromSettings() {
+        delegate?.syncNowRequested()
     }
 }
 

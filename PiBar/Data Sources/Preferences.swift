@@ -23,6 +23,15 @@ struct Preferences {
         static let verboseLabels = "verboseLabels"
         static let shortcutEnabled = "shortcutEnabled"
         static let pollingRate = "pollingRate"
+
+        // Primary -> Secondary Sync (Pi-hole v6)
+        static let syncEnabled = "syncEnabled"
+        static let syncPrimaryIdentifier = "syncPrimaryIdentifier"
+        static let syncSecondaryIdentifier = "syncSecondaryIdentifier"
+        static let syncIntervalMinutes = "syncIntervalMinutes"
+        static let syncLastRunAt = "syncLastRunAt"
+        static let syncLastStatus = "syncLastStatus"
+        static let syncLastMessage = "syncLastMessage"
     }
 
     static var standard: UserDefaults {
@@ -38,6 +47,13 @@ struct Preferences {
             Key.verboseLabels: false,
             Key.shortcutEnabled: true,
             Key.pollingRate: 3,
+
+            Key.syncEnabled: false,
+            Key.syncPrimaryIdentifier: "",
+            Key.syncSecondaryIdentifier: "",
+            Key.syncIntervalMinutes: 15,
+            Key.syncLastStatus: "",
+            Key.syncLastMessage: "",
         ])
 
         return database
@@ -176,6 +192,69 @@ extension UserDefaults {
 
     func set(pollingRate: Int) {
         set(pollingRate, for: Preferences.Key.pollingRate)
+    }
+
+    // MARK: - Primary -> Secondary Sync (Pi-hole v6)
+
+    var syncEnabled: Bool {
+        bool(forKey: Preferences.Key.syncEnabled)
+    }
+
+    func set(syncEnabled: Bool) {
+        set(syncEnabled, for: Preferences.Key.syncEnabled)
+    }
+
+    var syncPrimaryIdentifier: String {
+        string(forKey: Preferences.Key.syncPrimaryIdentifier) ?? ""
+    }
+
+    func set(syncPrimaryIdentifier: String) {
+        set(syncPrimaryIdentifier, for: Preferences.Key.syncPrimaryIdentifier)
+    }
+
+    var syncSecondaryIdentifier: String {
+        string(forKey: Preferences.Key.syncSecondaryIdentifier) ?? ""
+    }
+
+    func set(syncSecondaryIdentifier: String) {
+        set(syncSecondaryIdentifier, for: Preferences.Key.syncSecondaryIdentifier)
+    }
+
+    var syncIntervalMinutes: Int {
+        let stored = integer(forKey: Preferences.Key.syncIntervalMinutes)
+        if stored >= 5 {
+            return stored
+        }
+        set(syncIntervalMinutes: 15)
+        return 15
+    }
+
+    func set(syncIntervalMinutes: Int) {
+        set(syncIntervalMinutes, for: Preferences.Key.syncIntervalMinutes)
+    }
+
+    var syncLastRunAt: Date? {
+        object(forKey: Preferences.Key.syncLastRunAt) as? Date
+    }
+
+    func set(syncLastRunAt: Date?) {
+        set(syncLastRunAt, for: Preferences.Key.syncLastRunAt)
+    }
+
+    var syncLastStatus: String {
+        string(forKey: Preferences.Key.syncLastStatus) ?? ""
+    }
+
+    func set(syncLastStatus: String) {
+        set(syncLastStatus, for: Preferences.Key.syncLastStatus)
+    }
+
+    var syncLastMessage: String {
+        string(forKey: Preferences.Key.syncLastMessage) ?? ""
+    }
+
+    func set(syncLastMessage: String) {
+        set(syncLastMessage, for: Preferences.Key.syncLastMessage)
     }
 
     // Helpers

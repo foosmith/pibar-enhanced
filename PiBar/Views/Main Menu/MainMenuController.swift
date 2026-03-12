@@ -193,6 +193,15 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
         manager.setPollingRate(to: Preferences.standard.pollingRate)
     }
 
+    internal func syncNowRequested() {
+        Log.info("Sync Now requested (Phase 1 placeholder)")
+        // Phase 2+ will route this to a real sync operation.
+        Preferences.standard.set(syncLastRunAt: Date())
+        Preferences.standard.set(syncLastStatus: "skipped")
+        Preferences.standard.set(syncLastMessage: "Sync not implemented yet (Phase 1).")
+        updateInterface()
+    }
+
     private func updateInterface() {
         Log.debug("Updating Interface")
 
