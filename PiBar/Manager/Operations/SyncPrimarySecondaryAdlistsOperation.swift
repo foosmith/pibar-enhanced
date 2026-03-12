@@ -86,7 +86,8 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
 
     private struct Adlist: Hashable {
         let id: Int?
-        let address: String
+        let addressStored: String
+        let addressNormalized: String
         let enabled: Bool?
         let comment: String?
         let groups: [Int]
@@ -94,6 +95,7 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
 
     private struct AdlistWriteRequest: Encodable {
         let type: String?
+        let address: String?
         let enabled: Bool?
         let comment: String?
         let groups: [Int]?
@@ -107,42 +109,13 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
         let groups: [Int]?
     }
 
-    private struct BatchDeleteRequest: Encodable {
-        let type: String?
-        let items: [EncodableItem]
-    }
-
-    private struct EncodableItem: Encodable {
-        let id: Int?
-        let address: String?
-        let item: String?
-
-        init(id: Int) {
-            self.id = id
-            address = nil
-            item = nil
-        }
-
-        init(address: String) {
-            id = nil
-            self.address = address
-            item = nil
-        }
-
-        init(item: String) {
-            id = nil
-            address = nil
-            self.item = item
-        }
-    }
-
     private func syncAdlists(primary: Pihole6API, secondary: Pihole6API) async throws -> String {
         async let primaryLists = fetchAdlists(api: primary)
         async let secondaryLists = fetchAdlists(api: secondary)
         let (pl, sl) = try await (primaryLists, secondaryLists)
 
-        let primaryByAddress = Dictionary(uniqueKeysWithValues: pl.map { ($0.address, $0) })
-        let secondaryByAddress = Dictionary(uniqueKeysWithValues: sl.map { ($0.address, $0) })
+        let primaryByAddress = Dictionary(uniqueKeysWithValues: pl.map { ($0.addressNormalized, $0) })
+        let secondaryByAddress = Dictionary(uniqueKeysWithValues: sl.map { ($0.addressNormalized, $0) })
 
         let primaryKeys = Set(primaryByAddress.keys)
         let secondaryKeys = Set(secondaryByAddress.keys)
@@ -152,45 +125,34 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
 
         var deleted = 0
         var disabled = 0
+        var fixed = 0
         for address in toDelete {
-            let encoded = Pihole6API.encodePathComponent(address)
-            do {
-                _ = try await secondary.deleteData(
-                    "/lists/\(encoded)",
-                    apiKey: secondary.connection.token,
-                    queryItems: [
-                        URLQueryItem(name: "type", value: "block"),
-                        URLQueryItem(name: "app_sudo", value: "true"),
-                    ]
-                )
-                deleted += 1
-            } catch let apiError as APIError {
-                // Some versions may not support DELETE for lists; try batchDelete.
-                if case let .invalidResponse(statusCode: status, content: _) = apiError, status == 404 {
-                    do {
-                        try await batchDeleteAdlist(address: address, secondaryByAddress: secondaryByAddress, secondary: secondary)
-                        deleted += 1
-                        continue
-                    } catch let batchError as APIError {
-                        // If batchDelete exists but rejects our payload, fall back to disabling the extra list.
-                        if case .invalidResponse(statusCode: 400, content: _) = batchError {
-                            _ = try await secondary.putData(
-                                "/lists/\(encoded)",
-                                apiKey: secondary.connection.token,
-                                queryItems: [
-                                    URLQueryItem(name: "type", value: "block"),
-                                    URLQueryItem(name: "app_sudo", value: "true"),
-                                ],
-                                body: AdlistWriteRequest(type: "block", enabled: false, comment: "Disabled by PiBar sync (delete unsupported)", groups: nil)
-                            )
-                            disabled += 1
-                            continue
-                        }
-                        throw batchError
+            guard let list = secondaryByAddress[address] else { continue }
+            // Primary/Secondary sync policy: remove extras. On this Pi-hole build, delete may not be supported
+            // by address, so prefer id-based delete; otherwise disable.
+            if let id = list.id {
+                do {
+                    _ = try await secondary.deleteData(
+                        "/lists/\(id)",
+                        apiKey: secondary.connection.token,
+                        queryItems: [
+                            URLQueryItem(name: "type", value: "block"),
+                            URLQueryItem(name: "app_sudo", value: "true"),
+                        ]
+                    )
+                    deleted += 1
+                    continue
+                } catch let apiError as APIError {
+                    if case .invalidResponse(statusCode: 404, content: _) = apiError {
+                        // Fall through to disable.
+                    } else {
+                        throw apiError
                     }
                 }
-                throw apiError
             }
+
+            try await disableList(secondary: secondary, list: list, reason: "Disabled by PiBar sync (delete unsupported)")
+            disabled += 1
         }
 
         var created = 0
@@ -200,29 +162,39 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
             let existing = secondaryByAddress[address]
             let isUpdate = existing != nil
 
-            let encoded = Pihole6API.encodePathComponent(address)
-            do {
+            if let existing, existing.addressStored != desired.addressNormalized, looksPercentEncoded(existing.addressStored) {
+                // We previously created this list with an encoded address (e.g. https:%2F%2F...).
+                // Fix by creating a new correct list + disabling the broken one.
+                _ = try await secondary.postData(
+                    "/lists",
+                    apiKey: secondary.connection.token,
+                    queryItems: [URLQueryItem(name: "app_sudo", value: "true")],
+                    body: AdlistCreateRequest(address: desired.addressNormalized, type: "block", enabled: desired.enabled, comment: desired.comment, groups: desired.groups)
+                )
+                created += 1
+
+                try await disableList(secondary: secondary, list: existing, reason: "Disabled by PiBar sync (invalid encoded URL)")
+                fixed += 1
+                continue
+            }
+
+            if let existingId = existing?.id {
                 _ = try await secondary.putData(
-                    "/lists/\(encoded)",
+                    "/lists/\(existingId)",
                     apiKey: secondary.connection.token,
                     queryItems: [
                         URLQueryItem(name: "type", value: "block"),
                         URLQueryItem(name: "app_sudo", value: "true"),
                     ],
-                    body: AdlistWriteRequest(type: "block", enabled: desired.enabled, comment: desired.comment, groups: desired.groups)
+                    body: AdlistWriteRequest(type: "block", address: desired.addressNormalized, enabled: desired.enabled, comment: desired.comment, groups: desired.groups)
                 )
-            } catch let apiError as APIError {
-                // Some versions may not allow PUT to create. Try POST /lists to create.
-                if case let .invalidResponse(statusCode: status, content: _) = apiError, status == 404, !isUpdate {
-                    _ = try await secondary.postData(
-                        "/lists",
-                        apiKey: secondary.connection.token,
-                        queryItems: [URLQueryItem(name: "app_sudo", value: "true")],
-                        body: AdlistCreateRequest(address: desired.address, type: "block", enabled: desired.enabled, comment: desired.comment, groups: desired.groups)
-                    )
-                } else {
-                    throw apiError
-                }
+            } else {
+                _ = try await secondary.postData(
+                    "/lists",
+                    apiKey: secondary.connection.token,
+                    queryItems: [URLQueryItem(name: "app_sudo", value: "true")],
+                    body: AdlistCreateRequest(address: desired.addressNormalized, type: "block", enabled: desired.enabled, comment: desired.comment, groups: desired.groups)
+                )
             }
 
             if isUpdate {
@@ -232,8 +204,11 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
             }
         }
 
-        if disabled > 0 {
-            return "Adlists synced: +\(created) ~\(updated) -\(deleted) (disabled \(disabled) extras)"
+        if disabled > 0 || fixed > 0 {
+            var notes: [String] = []
+            if disabled > 0 { notes.append("disabled \(disabled) extras") }
+            if fixed > 0 { notes.append("fixed \(fixed) bad URLs") }
+            return "Adlists synced: +\(created) ~\(updated) -\(deleted) (\(notes.joined(separator: ", ")))"
         }
         return "Adlists synced: +\(created) ~\(updated) -\(deleted)"
     }
@@ -257,50 +232,29 @@ final class SyncPrimarySecondaryAdlistsOperation: AsyncOperation, @unchecked Sen
                 return nil
             }
             let id = d["id"] as? Int
-            guard let address = d["address"] as? String, !address.isEmpty else { return nil }
+            guard let addressStored = d["address"] as? String, !addressStored.isEmpty else { return nil }
+            let addressNormalized = addressStored.removingPercentEncoding ?? addressStored
             let enabled = d["enabled"] as? Bool
             let comment = d["comment"] as? String
             let groups = d["groups"] as? [Int] ?? []
-            return Adlist(id: id, address: address, enabled: enabled, comment: comment, groups: groups)
+            return Adlist(id: id, addressStored: addressStored, addressNormalized: addressNormalized, enabled: enabled, comment: comment, groups: groups)
         }
     }
 
-    private func batchDeleteAdlist(address: String, secondaryByAddress: [String: Adlist], secondary: Pihole6API) async throws {
-        // Prefer deleting by id if available; payload shapes appear to vary across Pi-hole v6 builds.
-        var attempts: [(String, BatchDeleteRequest)] = []
-        if let id = secondaryByAddress[address]?.id {
-            attempts.append(("id+type", BatchDeleteRequest(type: "block", items: [EncodableItem(id: id)])))
-            attempts.append(("id", BatchDeleteRequest(type: nil, items: [EncodableItem(id: id)])))
-        }
-        attempts.append(("address+type", BatchDeleteRequest(type: "block", items: [EncodableItem(address: address)])))
-        attempts.append(("address", BatchDeleteRequest(type: nil, items: [EncodableItem(address: address)])))
-        attempts.append(("item+type", BatchDeleteRequest(type: "block", items: [EncodableItem(item: address)])))
-        attempts.append(("item", BatchDeleteRequest(type: nil, items: [EncodableItem(item: address)])))
+    private func disableList(secondary: Pihole6API, list: Adlist, reason: String) async throws {
+        guard let id = list.id else { return }
+        _ = try await secondary.putData(
+            "/lists/\(id)",
+            apiKey: secondary.connection.token,
+            queryItems: [
+                URLQueryItem(name: "type", value: "block"),
+                URLQueryItem(name: "app_sudo", value: "true"),
+            ],
+            body: AdlistWriteRequest(type: "block", address: nil, enabled: false, comment: reason, groups: nil)
+        )
+    }
 
-        var lastError: APIError?
-        for (label, body) in attempts {
-            do {
-                _ = try await secondary.postData(
-                    "/lists:batchDelete",
-                    apiKey: secondary.connection.token,
-                    queryItems: [URLQueryItem(name: "app_sudo", value: "true")],
-                    body: body
-                )
-                return
-            } catch let apiError as APIError {
-                lastError = apiError
-                if case .invalidResponse(statusCode: 400, content: _) = apiError {
-                    Log.debug("Batch delete attempt failed (\(label))")
-                    continue
-                }
-                throw apiError
-            } catch {
-                throw error
-            }
-        }
-
-        if let lastError {
-            throw lastError
-        }
+    private func looksPercentEncoded(_ address: String) -> Bool {
+        address.contains("%2F") || address.contains("%3A")
     }
 }
