@@ -12,12 +12,35 @@
 import Cocoa
 
 class AboutViewController: NSViewController {
+    @IBOutlet private weak var appNameLabel: NSTextField!
+    @IBOutlet private weak var versionLabel: NSTextField!
+    @IBOutlet private weak var repositoryButton: NSButton!
+    @IBOutlet private weak var creditsLabel: NSTextField!
+
+    private let repositoryURL = URL(string: "https://github.com/foosmith/pibar-enhanced")!
+
     @IBAction func aboutURLAction(_: NSButton) {
-        let url = URL(string: "https://github.com/foosmith/pibar")!
-        NSWorkspace.shared.open(url)
+        NSWorkspace.shared.open(repositoryURL)
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
+
+        appNameLabel.stringValue = "PiBar Enhanced"
+        repositoryButton.title = "github.com/foosmith/pibar-enhanced"
+        creditsLabel.stringValue = """
+        Maintained by foosmith
+        Copyright © 2025 foosmith.
+        Pi-hole® is a registered trademark
+        of Pi-hole LLC.
+        """
+
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        if let version, let build, !build.isEmpty {
+            versionLabel.stringValue = "Version \(version) (\(build))"
+        } else if let version {
+            versionLabel.stringValue = "Version \(version)"
+        }
     }
 }

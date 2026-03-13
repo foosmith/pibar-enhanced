@@ -31,10 +31,10 @@
         <scene sceneID="9IB-04-fo0">
             <objects>
                 <windowController storyboardIdentifier="AboutWindowController" showSeguePresentationStyle="single" id="gmV-ql-AU5" customClass="AboutWindowController" customModule="PiBar" customModuleProvider="target" sceneMemberID="viewController">
-                    <window key="window" title="About PiBar" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" releasedWhenClosed="NO" visibleAtLaunch="NO" frameAutosaveName="" animationBehavior="default" id="eLV-a3-iIv">
+                    <window key="window" title="About PiBar Enhanced" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" releasedWhenClosed="NO" visibleAtLaunch="NO" frameAutosaveName="" animationBehavior="default" id="eLV-a3-iIv">
                         <windowStyleMask key="styleMask" titled="YES" closable="YES"/>
                         <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
-                        <rect key="contentRect" x="425" y="461" width="480" height="270"/>
+                        <rect key="contentRect" x="425" y="461" width="480" height="300"/>
                         <rect key="screenRect" x="0.0" y="0.0" width="2560" height="1417"/>
                         <connections>
                             <outlet property="delegate" destination="gmV-ql-AU5" id="9K8-z3-n76"/>
@@ -53,18 +53,18 @@
             <objects>
                 <viewController id="8lv-Nf-Li8" customClass="AboutViewController" customModule="PiBar" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" id="4DW-02-72t">
-                        <rect key="frame" x="0.0" y="0.0" width="270" height="275"/>
+                        <rect key="frame" x="0.0" y="0.0" width="300" height="305"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
                             <box title="About" titlePosition="noTitle" translatesAutoresizingMaskIntoConstraints="NO" id="JNj-dj-3s6">
-                                <rect key="frame" x="17" y="16" width="236" height="241"/>
+                                <rect key="frame" x="17" y="16" width="266" height="271"/>
                                 <view key="contentView" id="EhY-3x-KuI">
-                                    <rect key="frame" x="4" y="5" width="228" height="233"/>
+                                    <rect key="frame" x="4" y="5" width="258" height="263"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
                                         <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="TtV-qo-CDH" userLabel="GitHub URL">
-                                            <rect key="frame" x="20" y="69" width="188" height="16"/>
-                                            <buttonCell key="cell" type="bevel" title="github.com/amiantos/pibar" bezelStyle="rounded" alignment="center" imageScaling="proportionallyDown" inset="2" id="5B4-TG-p0I">
+                                            <rect key="frame" x="20" y="88" width="218" height="16"/>
+                                            <buttonCell key="cell" type="bevel" title="github.com/foosmith/pibar-enhanced" bezelStyle="rounded" alignment="center" imageScaling="proportionallyDown" inset="2" id="5B4-TG-p0I">
                                                 <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
                                                 <font key="font" metaFont="system"/>
                                             </buttonCell>
@@ -73,10 +73,11 @@
                                             </connections>
                                         </button>
                                         <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="59Q-Jm-Cbr">
-                                            <rect key="frame" x="18" y="16" width="192" height="42"/>
+                                            <rect key="frame" x="19" y="16" width="220" height="61"/>
                                             <textFieldCell key="cell" lineBreakMode="clipping" alignment="center" id="WN0-cg-lqh">
                                                 <font key="font" metaFont="label" size="11"/>
-                                                <string key="title">PiBar © 2025 Brad Root 
+                                                <string key="title">Maintained by foosmith
+Copyright © 2025 foosmith.
 Pi-hole® is a registered trademark
 of Pi-hole LLC.</string>
                                                 <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
@@ -88,16 +89,16 @@ of Pi-hole LLC.</string>
                                             <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" image="logoImage" id="ISi-XG-hOU"/>
                                         </imageView>
                                         <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="HRV-Iq-n3o">
-                                            <rect key="frame" x="76" y="108" width="77" height="38"/>
-                                            <textFieldCell key="cell" lineBreakMode="clipping" title="PiBar" id="ryo-yk-Q62">
+                                            <rect key="frame" x="34" y="127" width="191" height="38"/>
+                                            <textFieldCell key="cell" lineBreakMode="clipping" title="PiBar Enhanced" id="ryo-yk-Q62">
                                                 <font key="font" metaFont="system" size="32"/>
                                                 <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
                                             </textFieldCell>
                                         </textField>
                                         <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="gPz-LR-6t6">
-                                            <rect key="frame" x="62" y="94" width="105" height="14"/>
-                                            <textFieldCell key="cell" lineBreakMode="clipping" title="Version 1.2 (Beta 1)" id="oRj-Vt-ZIN">
+                                            <rect key="frame" x="62" y="112" width="135" height="14"/>
+                                            <textFieldCell key="cell" lineBreakMode="clipping" title="Version 2.1 (beta)" id="oRj-Vt-ZIN">
                                                 <font key="font" metaFont="label" size="11"/>
                                                 <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
@@ -133,7 +134,10 @@ of Pi-hole LLC.</string>
                         </constraints>
                     </view>
                     <connections>
-                        <outlet property="sda" destination="TtV-qo-CDH" id="ouZ-uE-lkf"/>
+                        <outlet property="appNameLabel" destination="HRV-Iq-n3o" id="fQO-sL-wVj"/>
+                        <outlet property="creditsLabel" destination="59Q-Jm-Cbr" id="nL2-8i-lVY"/>
+                        <outlet property="repositoryButton" destination="TtV-qo-CDH" id="ouZ-uE-lkf"/>
+                        <outlet property="versionLabel" destination="gPz-LR-6t6" id="MEs-XP-N8s"/>
                     </connections>
                 </viewController>
                 <customObject id="IGy-iL-Pfb" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
