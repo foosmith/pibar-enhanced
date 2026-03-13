@@ -2,7 +2,7 @@
 
 PiBar Enhanced is a fork of [PiBar by amiantos](https://github.com/amiantos/pibar) — a macOS menu bar app for managing your [Pi-hole](https://pi-hole.net)(s). This fork adds full **Pi-hole v6 support**, a **Primary → Secondary sync engine**, and a range of reliability and stability improvements.
 
-> **Version 2.0 (beta)** — Pi-hole v6 required for sync features.
+> **Version 2.1 (beta)** — Pi-hole v6 required for sync features.
 
 ## Features
 
@@ -59,13 +59,13 @@ Keep two Pi-hole v6 instances in sync automatically. The Primary is the source o
 
 ## Download & Install
 
-### Latest Release — 2.0 (beta)
+### Latest Release — 2.1 (beta)
 
-**[⬇ Download PiBar-2.0-beta.zip](https://github.com/foosmith/pibar-enhanced/releases/download/v2.0-beta/PiBar-2.0-beta.zip)**
+**[⬇ Download PiBar for macOS](https://github.com/foosmith/pibar-enhanced/releases/download/v2.1-beta/PiBar-2.0-beta.zip)**
 
 Requires macOS 13 or later.
 
-1. Download and unzip **PiBar-2.0-beta.zip**
+1. Download and unzip the release `.zip`
 2. Move **PiBar.app** to your `/Applications` folder
 3. Launch PiBar — it will appear in your menu bar
 
