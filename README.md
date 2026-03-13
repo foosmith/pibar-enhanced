@@ -1,58 +1,104 @@
-# PiBar for macOS
+# PiBar Enhanced for macOS
 
-PiBar gives you all the tools you need to manage your [Pi-hole](https://pi-hole.net)(s) right from your macOS menu bar.
+PiBar Enhanced is a fork of [PiBar by amiantos](https://github.com/amiantos/pibar) — a macOS menu bar app for managing your [Pi-hole](https://pi-hole.net)(s). This fork adds full **Pi-hole v6 support**, a **Primary → Secondary sync engine**, and a range of reliability and stability improvements.
+
+> **Version 2.0 (beta)** — Pi-hole v6 required for sync features.
 
 ## Features
 
-- Display DNS query stats in your macOS menu bar
-- Supports multiple Pi-holes (inc. quadruple failover setups!)
-- Toggle your Pi-hole(s) on/off from the menu or anywhere via ⌘⌥⇧P
-- Displays warnings if any or all of your Pi-holes are inaccessible or disabled
-- No capital "h" in the word "hole" in the app or in the code
-- Beautiful app icon
-- Totally FOSS
-- Supports macOS 10.12 (Sierra) and later
+### Core (inherited from PiBar)
+
+- Display DNS query stats (queries, blocked, % blocked) in your macOS menu bar
+- Support for multiple Pi-holes, including quadruple failover setups
+- Toggle Pi-hole(s) on/off from the menu or via keyboard shortcut ⌘⌥⇧P
+- Warnings when any Pi-hole is inaccessible or disabled
+- Supports both legacy Pi-hole (v5 and earlier) and Pi-hole v6 connections
+
+### New in PiBar Enhanced
+
+#### Pi-hole v6 Support
+- Full Pi-hole v6 API client (`Pihole6API`) with proper authentication flow
+- Fixed connection testing to use the v6 API instead of legacy endpoints
+- Unique connection identifiers so multiple Pi-holes sharing a hostname (different ports/protocols) no longer overwrite each other
+- Explicit request timeouts on all API calls with actionable error messages for auth failures, timeouts, and unreachable hosts
+
+#### Primary → Secondary Sync *(Pi-hole v6 only)*
+Keep two Pi-hole v6 instances in sync automatically. The Primary is the source of truth; the Secondary is reconciled to match.
+
+**What gets synced:**
+- **Adlists** — URLs upserted/deleted to match Primary
+- **Domain lists** — All 4 buckets: allow/exact, deny/exact, allow/regex, deny/regex
+- **Groups** — Created/updated by name; Secondary-only groups are disabled
+- **Group assignments** — Adlists and domains on Secondary get the same group memberships as Primary (IDs translated by name across instances)
+
+**Controls:**
+- **Sync Now** button in Sync Settings and in the menu bar (appears when sync is configured)
+- **Interval scheduling** — configurable from 5 minutes (default: 15 min)
+- **Scope toggles** — independently enable/disable Groups, Adlists, and Domains sync
+- **Dry-run mode** — computes the full diff and reports what *would* change without writing anything
+- **Wipe secondary before sync** — optional destructive pre-clean (confirmation required)
+- **In-flight indicator** — "Sync Now" becomes "Syncing…" and disables while a sync is running
+- **Activity log** — live progress messages in the Sync Settings window
+- **Last sync status** — timestamp, result (success / dry-run / failed / skipped), and detail message
+
+**Requirements:**
+- Two Pi-hole v6 connections configured in PiBar
+- Secondary Pi-hole must have `webserver.api.app_sudo=true` in its config for write operations
+
+#### Reliability & Stability
+- Replaced `sleep(1)` synchronization workaround in the update loop with a proper completion-operation model
+- Concurrent Pi-hole status updates now merge state safely via `NSLock`-guarded snapshots
+- Sync coalescing: overlapping sync requests queue one follow-up run instead of stacking operations
+- Domain bucket syncs run in parallel (4× throughput vs. sequential)
+- Credentials stored without repeated Keychain prompts; one-time migration from Keychain on first launch
+
+#### Code Quality
+- Debug logging disabled in Release builds
+- Removed all deprecated/unused persistence code
+- Force-unwrap patterns replaced with safe handling at API boundary
 
 ## Screenshots
 
 ![PiBar Screenshots](/.github/screenshots.jpg?raw=true)
 
-## Download (Pi-hole 5 and older)
-
-- [Download PiBar v1.1.2 for macOS 10.12 and later](https://s3.amazonaws.com/amiantos/PiBar-1.1.2.zip)
-- Or, [Purchase PiBar on the App Store](https://apps.apple.com/us/app/pibar-for-pi-hole/id1514292645?ls=1) for automatic updates.
-- Or, `brew install pibar` to install using Homebrew.
-
-## Download Beta (Pi-hole 6)
-
-- [Download PiBar v1.2 Beta for macOS 10.15 and later](https://amiantos.s3.us-east-1.amazonaws.com/PiBar-1.2-beta.zip)
-- Provide feedback via [GitHub](https://github.com/amiantos/pibar/issues/56#issuecomment-2745123904), [Reddit](https://www.reddit.com/r/PiBar/comments/1jdzue6/macos_12_beta_pihole_6_support/), or [Email](mailto:bradroot@me.com?subject=PiBar%201.2%20Beta%20Feedback).
-
 ## Quick Start
 
-1. Launch PiBar
-2. Click on the PiBar icon in your menu bar and go to Preferences
-3. Click Add to add your Pi-hole details
-4. Click Test, if the test is successful, click Save & Close
-5. Add more Pi-holes if you have them :)
-6. Adjust your menu bar display preferences
-7. Close the Preferences window and enjoy!
+1. Launch PiBar Enhanced
+2. Click the PiBar icon in your menu bar → Preferences
+3. Click **Add** and enter your Pi-hole connection details
+4. Click **Test Connection** — if successful, click **Save & Close**
+5. Repeat for additional Pi-holes
+6. Adjust menu bar display preferences on the General tab
 
-## Like PiBar a lot?
+### Enabling Sync
 
-- [Purchase PiBar on the App Store](https://apps.apple.com/us/app/pibar-for-pi-hole/id1514292645?ls=1)
-- [Sponsor amiantos on GitHub](https://github.com/sponsors/amiantos)
-- [Become a patron on Patreon](https://www.patreon.com/amiantos)
+1. Open Preferences → **Sync** tab
+2. Check **Enable Primary → Secondary Sync**
+3. Select your Primary and Secondary Pi-holes (must both be v6)
+4. Set the sync interval (minutes)
+5. Choose scope: Groups, Adlists, Domains (all enabled by default)
+6. Click **Sync Now** to run immediately, or wait for the first scheduled sync
+
+> Ensure `webserver.api.app_sudo=true` is set on your Secondary Pi-hole. PiBar will show a clear error if this is missing.
+
+## Building from Source
+
+```bash
+git clone https://github.com/foosmith/pibar-enhanced.git
+cd pibar-enhanced
+open PiBar.xcodeproj
+```
+
+Requires Xcode 15+ and macOS 13+.
 
 ## Get Help
 
-- Feel free to [post an issue](https://github.com/amiantos/pibar/issues/new) if you need help or have a feature suggestion. Dream big!
-- There's a subreddit over at [/r/PiBar](https://www.reddit.com/r/PiBar) if you want to talk about PiBar with the community. I'll also be posting news about updates and possible beta tests over there, so you should join if that sounds up your alley!
-- You can also write to me on Mastodon @[brad@mstdn.amiantos.net](https://mstdn.amiantos.net/brad)
+- [Open an issue](https://github.com/foosmith/pibar-enhanced/issues/new) for bugs or feature requests
 
 ## Credits
 
-- PiBar was built by [Brad Root](https://github.com/amiantos)
-- PiBar's wonderful icon was designed by [Jozef Bañuelos](https://jozef.design)
-- Pi-hole® is a registered trademark of Pi-hole LLC.
-- PiBar is an independent project and is not directly affiliated with Pi-hole LLC or the Pi-hole community.
+- PiBar Enhanced maintained by [foosmith](https://github.com/foosmith)
+- Original PiBar created by [Brad Root (amiantos)](https://github.com/amiantos)
+- App icon designed by [Jozef Bañuelos](https://jozef.design)
+- Pi-hole® is a registered trademark of Pi-hole LLC
+- PiBar Enhanced is an independent project and is not affiliated with Pi-hole LLC or the Pi-hole project

@@ -96,7 +96,14 @@ class PiBarManager: NSObject {
             return
         }
 
-        let newTimer = Timer(timeInterval: syncInterval, target: self, selector: #selector(syncDryRunFromTimer), userInfo: nil, repeats: true)
+        // Don't bother scheduling if Primary/Secondary aren't configured.
+        let primaryId = Preferences.standard.syncPrimaryIdentifier
+        let secondaryId = Preferences.standard.syncSecondaryIdentifier
+        guard !primaryId.isEmpty, !secondaryId.isEmpty, primaryId != secondaryId else {
+            return
+        }
+
+        let newTimer = Timer(timeInterval: syncInterval, target: self, selector: #selector(syncFromTimer), userInfo: nil, repeats: true)
         newTimer.tolerance = 10
         RunLoop.main.add(newTimer, forMode: .common)
         syncTimer = newTimer
@@ -104,7 +111,7 @@ class PiBarManager: NSObject {
     }
 
     func syncNow() {
-        enqueueDryRunSync()
+        enqueueFullSync()
     }
 
     // Enable / Disable Pi-hole(s)
@@ -334,13 +341,13 @@ class PiBarManager: NSObject {
         )
     }
 
-    // MARK: - Sync (Phase 2 dry-run)
+    // MARK: - Sync
 
-    @objc private func syncDryRunFromTimer() {
-        enqueueDryRunSync()
+    @objc private func syncFromTimer() {
+        enqueueFullSync()
     }
 
-    private func enqueueDryRunSync() {
+    private func enqueueFullSync() {
         syncStateLock.lock()
         if isSyncInFlight {
             syncRequested = true
@@ -350,9 +357,12 @@ class PiBarManager: NSObject {
         isSyncInFlight = true
         syncStateLock.unlock()
 
-        Log.debug("Manager: Enqueuing sync dry-run")
+        Log.debug("Manager: Enqueuing full sync (groups + adlists + domains)")
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .piBarSyncBegan, object: nil)
+        }
 
-        let operation = SyncPrimarySecondaryDryRunOperation()
+        let operation = SyncPrimarySecondaryOperation()
 
         let completion = BlockOperation { [weak self] in
             guard let self else { return }
@@ -362,46 +372,12 @@ class PiBarManager: NSObject {
             self.syncRequested = false
             self.syncStateLock.unlock()
 
-            if shouldRunAgain {
-                self.enqueueDryRunSync()
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .piBarSyncEnded, object: nil)
             }
-        }
-
-        completion.addDependency(operation)
-        operationQueue.addOperation(operation)
-        operationQueue.addOperation(completion)
-    }
-
-    // MARK: - Sync (Phase 3 apply adlists)
-
-    func syncAdlistsNow() {
-        enqueueAdlistsSync()
-    }
-
-    private func enqueueAdlistsSync() {
-        syncStateLock.lock()
-        if isSyncInFlight {
-            syncRequested = true
-            syncStateLock.unlock()
-            return
-        }
-        isSyncInFlight = true
-        syncStateLock.unlock()
-
-        Log.debug("Manager: Enqueuing adlists sync")
-
-        let operation = SyncPrimarySecondaryAdlistsOperation()
-
-        let completion = BlockOperation { [weak self] in
-            guard let self else { return }
-            self.syncStateLock.lock()
-            self.isSyncInFlight = false
-            let shouldRunAgain = self.syncRequested
-            self.syncRequested = false
-            self.syncStateLock.unlock()
 
             if shouldRunAgain {
-                self.enqueueAdlistsSync()
+                self.enqueueFullSync()
             }
         }
 

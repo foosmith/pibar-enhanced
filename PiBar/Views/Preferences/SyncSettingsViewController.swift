@@ -15,116 +15,123 @@ protocol SyncSettingsViewControllerDelegate: AnyObject {
 final class SyncSettingsViewController: NSViewController {
     weak var delegate: SyncSettingsViewControllerDelegate?
 
+    // MARK: - Controls
+
     private let syncEnabledCheckbox = NSButton(checkboxWithTitle: "Enable Primary → Secondary Sync", target: nil, action: nil)
+
     private let primaryLabel = NSTextField(labelWithString: "Primary")
     private let primaryPopup = NSPopUpButton()
     private let secondaryLabel = NSTextField(labelWithString: "Secondary")
     private let secondaryPopup = NSPopUpButton()
-    private let intervalLabel = NSTextField(labelWithString: "Interval (minutes)")
+    private let intervalLabel = NSTextField(labelWithString: "Interval (min)")
     private let intervalField = NSTextField()
+
     private let wipeSecondaryCheckbox = NSButton(checkboxWithTitle: "Wipe secondary adlists before sync (destructive)", target: nil, action: nil)
+
+    // Scope
+    private let scopeLabel = NSTextField(labelWithString: "Scope:")
+    private let syncGroupsCheckbox  = NSButton(checkboxWithTitle: "Groups",  target: nil, action: nil)
+    private let syncAdlistsCheckbox = NSButton(checkboxWithTitle: "Adlists", target: nil, action: nil)
+    private let syncDomainsCheckbox = NSButton(checkboxWithTitle: "Domains", target: nil, action: nil)
+    private let dryRunCheckbox = NSButton(checkboxWithTitle: "Dry run (preview changes without writing)", target: nil, action: nil)
+
     private let statusLabel = NSTextField(labelWithString: "")
     private let logScrollView = NSScrollView()
     private let logTextView = NSTextView()
 
     private let syncNowButton = NSButton(title: "Sync Now", target: nil, action: nil)
-    private let closeButton = NSButton(title: "Close", target: nil, action: nil)
+    private let closeButton   = NSButton(title: "Close",    target: nil, action: nil)
 
     private var v6Connections: [PiholeConnectionV3] {
         Preferences.standard.piholes.filter(\.isV6)
     }
 
-    override func loadView() {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 760, height: 360))
+    // MARK: - Layout
 
-        primaryPopup.translatesAutoresizingMaskIntoConstraints = false
-        secondaryPopup.translatesAutoresizingMaskIntoConstraints = false
-        intervalField.translatesAutoresizingMaskIntoConstraints = false
-        wipeSecondaryCheckbox.translatesAutoresizingMaskIntoConstraints = false
-        syncEnabledCheckbox.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        logScrollView.translatesAutoresizingMaskIntoConstraints = false
-        logTextView.translatesAutoresizingMaskIntoConstraints = false
-        syncNowButton.translatesAutoresizingMaskIntoConstraints = false
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
+    override func loadView() {
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 760, height: 460))
+
+        // Translates
+        for v in [primaryPopup, secondaryPopup, intervalField, wipeSecondaryCheckbox,
+                  syncEnabledCheckbox, statusLabel, logScrollView, syncNowButton, closeButton,
+                  scopeLabel, syncGroupsCheckbox, syncAdlistsCheckbox, syncDomainsCheckbox,
+                  dryRunCheckbox] as [NSView] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+        }
 
         intervalField.alignment = .right
         intervalField.placeholderString = "15"
-
         syncNowButton.bezelStyle = .rounded
-        closeButton.bezelStyle = .rounded
+        closeButton.bezelStyle   = .rounded
 
-        if let cell = syncEnabledCheckbox.cell as? NSButtonCell {
-            cell.lineBreakMode = .byClipping
-        }
+        // Targets
+        syncEnabledCheckbox.target = self; syncEnabledCheckbox.action = #selector(syncEnabledChanged)
+        primaryPopup.target        = self; primaryPopup.action        = #selector(primaryChanged)
+        secondaryPopup.target      = self; secondaryPopup.action      = #selector(secondaryChanged)
+        intervalField.target       = self; intervalField.action       = #selector(intervalChanged)
+        wipeSecondaryCheckbox.target   = self; wipeSecondaryCheckbox.action   = #selector(wipeSecondaryChanged)
+        syncGroupsCheckbox.target      = self; syncGroupsCheckbox.action      = #selector(scopeChanged)
+        syncAdlistsCheckbox.target     = self; syncAdlistsCheckbox.action     = #selector(scopeChanged)
+        syncDomainsCheckbox.target     = self; syncDomainsCheckbox.action     = #selector(scopeChanged)
+        dryRunCheckbox.target          = self; dryRunCheckbox.action          = #selector(dryRunChanged)
+        syncNowButton.target           = self; syncNowButton.action           = #selector(syncNowPressed)
+        closeButton.target             = self; closeButton.action             = #selector(closePressed)
 
-        syncEnabledCheckbox.target = self
-        syncEnabledCheckbox.action = #selector(syncEnabledChanged)
-
-        primaryPopup.target = self
-        primaryPopup.action = #selector(primaryChanged)
-
-        secondaryPopup.target = self
-        secondaryPopup.action = #selector(secondaryChanged)
-
-        intervalField.target = self
-        intervalField.action = #selector(intervalChanged)
-
-        wipeSecondaryCheckbox.target = self
-        wipeSecondaryCheckbox.action = #selector(wipeSecondaryChanged)
-
-        syncNowButton.target = self
-        syncNowButton.action = #selector(syncNowPressed)
-
-        closeButton.target = self
-        closeButton.action = #selector(closePressed)
-
+        // Connection grid
         let grid = NSGridView(views: [
-            [primaryLabel, primaryPopup],
+            [primaryLabel,  primaryPopup],
             [secondaryLabel, secondaryPopup],
             [intervalLabel, intervalField],
         ])
         grid.translatesAutoresizingMaskIntoConstraints = false
-        grid.rowSpacing = 10
+        grid.rowSpacing    = 10
         grid.columnSpacing = 12
-        grid.xPlacement = .fill
+        grid.xPlacement    = .fill
         grid.column(at: 0).xPlacement = .leading
         grid.column(at: 1).xPlacement = .fill
+        for popup in [primaryPopup, secondaryPopup] {
+            popup.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            popup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        }
+        for label in [primaryLabel, secondaryLabel, intervalLabel] {
+            label.setContentHuggingPriority(.required, for: .horizontal)
+        }
 
-        primaryPopup.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        primaryPopup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        secondaryPopup.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        secondaryPopup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        primaryLabel.setContentHuggingPriority(.required, for: .horizontal)
-        secondaryLabel.setContentHuggingPriority(.required, for: .horizontal)
-        intervalLabel.setContentHuggingPriority(.required, for: .horizontal)
+        // Scope row
+        let scopeRow = NSStackView(views: [scopeLabel, syncGroupsCheckbox, syncAdlistsCheckbox, syncDomainsCheckbox])
+        scopeRow.orientation = .horizontal
+        scopeRow.spacing     = 14
+        scopeRow.alignment   = .centerY
+        scopeRow.translatesAutoresizingMaskIntoConstraints = false
+        scopeLabel.setContentHuggingPriority(.required, for: .horizontal)
 
-        let buttons = NSStackView(views: [syncNowButton, closeButton])
-        buttons.orientation = .horizontal
-        buttons.spacing = 10
-        buttons.alignment = .centerY
-        buttons.translatesAutoresizingMaskIntoConstraints = false
+        // Log view
+        logTextView.isEditable   = false
+        logTextView.isSelectable = true
+        logTextView.font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize - 1, weight: .regular)
+        logTextView.textContainerInset = NSSize(width: 6, height: 6)
+        logScrollView.documentView     = logTextView
+        logScrollView.hasVerticalScroller = true
+        logScrollView.borderType       = .bezelBorder
+        logScrollView.drawsBackground  = false
 
-        statusLabel.lineBreakMode = .byWordWrapping
-        statusLabel.maximumNumberOfLines = 3
-        statusLabel.isSelectable = true
+        // Status label
+        statusLabel.lineBreakMode          = .byWordWrapping
+        statusLabel.maximumNumberOfLines   = 3
+        statusLabel.isSelectable           = true
         statusLabel.allowsEditingTextAttributes = true
 
-        logTextView.isEditable = false
-        logTextView.isSelectable = true
-        logTextView.font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        logTextView.textContainerInset = NSSize(width: 6, height: 6)
-        logScrollView.documentView = logTextView
-        logScrollView.hasVerticalScroller = true
-        logScrollView.borderType = .bezelBorder
-        logScrollView.drawsBackground = false
+        // Buttons row
+        let buttons = NSStackView(views: [syncNowButton, closeButton])
+        buttons.orientation = .horizontal
+        buttons.spacing     = 10
+        buttons.alignment   = .centerY
+        buttons.translatesAutoresizingMaskIntoConstraints = false
 
-        container.addSubview(syncEnabledCheckbox)
-        container.addSubview(grid)
-        container.addSubview(wipeSecondaryCheckbox)
-        container.addSubview(statusLabel)
-        container.addSubview(logScrollView)
-        container.addSubview(buttons)
+        for sub in [syncEnabledCheckbox, grid, wipeSecondaryCheckbox, scopeRow, dryRunCheckbox,
+                    statusLabel, logScrollView, buttons] as [NSView] {
+            container.addSubview(sub)
+        }
 
         NSLayoutConstraint.activate([
             syncEnabledCheckbox.topAnchor.constraint(equalTo: container.topAnchor, constant: 20),
@@ -134,21 +141,28 @@ final class SyncSettingsViewController: NSViewController {
             grid.topAnchor.constraint(equalTo: syncEnabledCheckbox.bottomAnchor, constant: 16),
             grid.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
             grid.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
+            intervalField.widthAnchor.constraint(equalToConstant: 60),
 
-            intervalField.widthAnchor.constraint(equalToConstant: 80),
-
-            wipeSecondaryCheckbox.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 10),
+            wipeSecondaryCheckbox.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 12),
             wipeSecondaryCheckbox.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
             wipeSecondaryCheckbox.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -20),
 
-            statusLabel.topAnchor.constraint(equalTo: wipeSecondaryCheckbox.bottomAnchor, constant: 10),
+            scopeRow.topAnchor.constraint(equalTo: wipeSecondaryCheckbox.bottomAnchor, constant: 10),
+            scopeRow.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            scopeRow.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -20),
+
+            dryRunCheckbox.topAnchor.constraint(equalTo: scopeRow.bottomAnchor, constant: 8),
+            dryRunCheckbox.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            dryRunCheckbox.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -20),
+
+            statusLabel.topAnchor.constraint(equalTo: dryRunCheckbox.bottomAnchor, constant: 10),
             statusLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
             statusLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
 
-            logScrollView.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 10),
+            logScrollView.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 8),
             logScrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
             logScrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
-            logScrollView.heightAnchor.constraint(equalToConstant: 110),
+            logScrollView.heightAnchor.constraint(equalToConstant: 100),
 
             buttons.topAnchor.constraint(equalTo: logScrollView.bottomAnchor, constant: 14),
             buttons.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
@@ -158,11 +172,15 @@ final class SyncSettingsViewController: NSViewController {
         view = container
     }
 
+    // MARK: - Lifecycle
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Sync Settings"
-        preferredContentSize = NSSize(width: 760, height: 360)
-        NotificationCenter.default.addObserver(self, selector: #selector(handleSyncProgress(_:)), name: .piBarSyncProgress, object: nil)
+        preferredContentSize = NSSize(width: 760, height: 460)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleSyncProgress(_:)),  name: .piBarSyncProgress, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleSyncBegan),  name: .piBarSyncBegan,    object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleSyncEnded),  name: .piBarSyncEnded,    object: nil)
         refreshUI()
     }
 
@@ -178,6 +196,8 @@ final class SyncSettingsViewController: NSViewController {
         }
     }
 
+    // MARK: - UI Helpers
+
     private func displayTitle(for connection: PiholeConnectionV3) -> String {
         let scheme = connection.useSSL ? "https" : "http"
         return "\(connection.hostname) (\(scheme):\(connection.port))"
@@ -186,20 +206,15 @@ final class SyncSettingsViewController: NSViewController {
     private func populatePopups() {
         primaryPopup.removeAllItems()
         secondaryPopup.removeAllItems()
-
         for connection in v6Connections {
-            let title = displayTitle(for: connection)
+            let title      = displayTitle(for: connection)
             let identifier = connection.identifier
-
-            let primaryItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-            primaryItem.representedObject = identifier
-            primaryItem.toolTip = identifier
-            primaryPopup.menu?.addItem(primaryItem)
-
-            let secondaryItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-            secondaryItem.representedObject = identifier
-            secondaryItem.toolTip = identifier
-            secondaryPopup.menu?.addItem(secondaryItem)
+            for popup in [primaryPopup, secondaryPopup] {
+                let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                item.representedObject = identifier
+                item.toolTip           = identifier
+                popup.menu?.addItem(item)
+            }
         }
     }
 
@@ -220,14 +235,17 @@ final class SyncSettingsViewController: NSViewController {
         let hasAtLeastTwo = v6Connections.count >= 2
 
         syncEnabledCheckbox.state = Preferences.standard.syncEnabled ? .on : .off
-        wipeSecondaryCheckbox.state = Preferences.standard.syncWipeSecondaryBeforeSync ? .on : .off
+        wipeSecondaryCheckbox.state   = Preferences.standard.syncWipeSecondaryBeforeSync ? .on : .off
+        syncGroupsCheckbox.state      = Preferences.standard.syncSkipGroups  ? .off : .on
+        syncAdlistsCheckbox.state     = Preferences.standard.syncSkipAdlists ? .off : .on
+        syncDomainsCheckbox.state     = Preferences.standard.syncSkipDomains ? .off : .on
+        dryRunCheckbox.state          = Preferences.standard.syncDryRunEnabled ? .on : .off
 
         populatePopups()
-
         intervalField.stringValue = "\(Preferences.standard.syncIntervalMinutes)"
 
         if !Preferences.standard.syncPrimaryIdentifier.isEmpty {
-            selectPopup(primaryPopup, identifier: Preferences.standard.syncPrimaryIdentifier)
+            selectPopup(primaryPopup,   identifier: Preferences.standard.syncPrimaryIdentifier)
         }
         if !Preferences.standard.syncSecondaryIdentifier.isEmpty {
             selectPopup(secondaryPopup, identifier: Preferences.standard.syncSecondaryIdentifier)
@@ -235,10 +253,15 @@ final class SyncSettingsViewController: NSViewController {
 
         if !hasAtLeastTwo {
             syncEnabledCheckbox.isEnabled = false
-            primaryPopup.isEnabled = false
-            secondaryPopup.isEnabled = false
-            intervalField.isEnabled = false
-            syncNowButton.isEnabled = false
+            primaryPopup.isEnabled        = false
+            secondaryPopup.isEnabled      = false
+            intervalField.isEnabled       = false
+            syncNowButton.isEnabled       = false
+            wipeSecondaryCheckbox.isEnabled   = false
+            syncGroupsCheckbox.isEnabled      = false
+            syncAdlistsCheckbox.isEnabled     = false
+            syncDomainsCheckbox.isEnabled     = false
+            dryRunCheckbox.isEnabled          = false
             statusLabel.stringValue = "Sync requires two Pi-hole v6 connections."
             updateStatus()
             return
@@ -246,10 +269,14 @@ final class SyncSettingsViewController: NSViewController {
 
         syncEnabledCheckbox.isEnabled = true
         let syncEnabled = syncEnabledCheckbox.state == .on
-        primaryPopup.isEnabled = syncEnabled
-        secondaryPopup.isEnabled = syncEnabled
-        intervalField.isEnabled = syncEnabled
-        wipeSecondaryCheckbox.isEnabled = syncEnabled
+        primaryPopup.isEnabled        = syncEnabled
+        secondaryPopup.isEnabled      = syncEnabled
+        intervalField.isEnabled       = syncEnabled
+        wipeSecondaryCheckbox.isEnabled   = syncEnabled
+        syncGroupsCheckbox.isEnabled      = syncEnabled
+        syncAdlistsCheckbox.isEnabled     = syncEnabled
+        syncDomainsCheckbox.isEnabled     = syncEnabled
+        dryRunCheckbox.isEnabled          = syncEnabled
 
         if !syncEnabled {
             syncNowButton.isEnabled = false
@@ -260,7 +287,7 @@ final class SyncSettingsViewController: NSViewController {
 
         validateSelection()
 
-        let primary = selectedIdentifier(from: primaryPopup)
+        let primary   = selectedIdentifier(from: primaryPopup)
         let secondary = selectedIdentifier(from: secondaryPopup)
         let selectionValid = !primary.isEmpty && !secondary.isEmpty && primary != secondary
         syncNowButton.isEnabled = selectionValid
@@ -269,15 +296,14 @@ final class SyncSettingsViewController: NSViewController {
     }
 
     private func validateSelection() {
-        let primary = selectedIdentifier(from: primaryPopup)
+        let primary   = selectedIdentifier(from: primaryPopup)
         let secondary = selectedIdentifier(from: secondaryPopup)
-
         if !primary.isEmpty, primary == secondary, secondaryPopup.numberOfItems > 1 {
             for item in secondaryPopup.itemArray {
                 guard let represented = item.representedObject as? String else { continue }
                 if represented != primary {
-                secondaryPopup.select(item)
-                break
+                    secondaryPopup.select(item)
+                    break
                 }
             }
             Preferences.standard.set(syncSecondaryIdentifier: selectedIdentifier(from: secondaryPopup))
@@ -285,23 +311,39 @@ final class SyncSettingsViewController: NSViewController {
     }
 
     private func updateStatus() {
-        if let last = Preferences.standard.syncLastRunAt {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .short
-            formatter.timeStyle = .short
-            let status = Preferences.standard.syncLastStatus
-            let message = Preferences.standard.syncLastMessage
-            statusLabel.stringValue = "Last sync: \(formatter.string(from: last)) \(status.isEmpty ? "" : "– \(status)") \(message)"
-        } else {
+        guard let last = Preferences.standard.syncLastRunAt else {
             statusLabel.stringValue = "No sync run yet."
+            return
         }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        let status  = Preferences.standard.syncLastStatus
+        let message = Preferences.standard.syncLastMessage
+        let statusPart = status.isEmpty ? "" : " [\(status)]"
+        statusLabel.stringValue = "Last sync: \(formatter.string(from: last))\(statusPart)\n\(message)"
     }
 
+    // MARK: - Notification Handlers
+
     @objc private func handleSyncProgress(_ notification: Notification) {
-        guard let userInfo = notification.userInfo else { return }
-        guard let message = userInfo[SyncProgress.messageKey] as? String else { return }
+        guard let message = notification.userInfo?[SyncProgress.messageKey] as? String else { return }
         appendLog(message)
-        statusLabel.stringValue = message
+    }
+
+    @objc private func handleSyncBegan() {
+        syncNowButton.isEnabled = false
+        appendLog("— sync started —")
+    }
+
+    @objc private func handleSyncEnded() {
+        // Re-evaluate whether the button should be enabled based on current selection.
+        let primary   = selectedIdentifier(from: primaryPopup)
+        let secondary = selectedIdentifier(from: secondaryPopup)
+        let selectionValid = !primary.isEmpty && !secondary.isEmpty && primary != secondary
+        syncNowButton.isEnabled = selectionValid && Preferences.standard.syncEnabled
+        updateStatus()
+        appendLog("— sync ended —")
     }
 
     private func appendLog(_ line: String) {
@@ -314,11 +356,17 @@ final class SyncSettingsViewController: NSViewController {
         logTextView.string = ""
     }
 
+    // MARK: - Persistence
+
     private func persistSelections() {
         Preferences.standard.set(syncEnabled: syncEnabledCheckbox.state == .on)
         Preferences.standard.set(syncWipeSecondaryBeforeSync: wipeSecondaryCheckbox.state == .on)
+        Preferences.standard.set(syncSkipGroups:  syncGroupsCheckbox.state  == .off)
+        Preferences.standard.set(syncSkipAdlists: syncAdlistsCheckbox.state == .off)
+        Preferences.standard.set(syncSkipDomains: syncDomainsCheckbox.state == .off)
+        Preferences.standard.set(syncDryRunEnabled: dryRunCheckbox.state == .on)
 
-        let primary = selectedIdentifier(from: primaryPopup)
+        let primary   = selectedIdentifier(from: primaryPopup)
         let secondary = selectedIdentifier(from: secondaryPopup)
         Preferences.standard.set(syncPrimaryIdentifier: primary)
         Preferences.standard.set(syncSecondaryIdentifier: secondary)
@@ -334,59 +382,38 @@ final class SyncSettingsViewController: NSViewController {
 
     // MARK: - Actions
 
-    @objc private func syncEnabledChanged() {
-        persistSelections()
-        refreshUI()
-    }
-
-    @objc private func primaryChanged() {
-        persistSelections()
-        refreshUI()
-    }
-
-    @objc private func secondaryChanged() {
-        persistSelections()
-        refreshUI()
-    }
-
-    @objc private func intervalChanged() {
-        persistSelections()
-        refreshUI()
-    }
+    @objc private func syncEnabledChanged() { persistSelections(); refreshUI() }
+    @objc private func primaryChanged()     { persistSelections(); refreshUI() }
+    @objc private func secondaryChanged()   { persistSelections(); refreshUI() }
+    @objc private func intervalChanged()    { persistSelections(); refreshUI() }
+    @objc private func scopeChanged()       { persistSelections() }
+    @objc private func dryRunChanged()      { persistSelections() }
 
     @objc private func wipeSecondaryChanged() {
-        let wantsEnabled = wipeSecondaryCheckbox.state == .on
-        if wantsEnabled {
+        if wipeSecondaryCheckbox.state == .on {
             confirmEnableWipe()
-            return
+        } else {
+            persistSelections()
+            refreshUI()
         }
-
-        persistSelections()
-        refreshUI()
     }
 
     private func confirmEnableWipe() {
-        guard let window = view.window else {
-            persistSelections()
-            refreshUI()
-            return
-        }
+        guard let window = view.window else { persistSelections(); refreshUI(); return }
 
         let alert = NSAlert()
-        alert.messageText = "Enable destructive pre-clean?"
-        alert.informativeText = "Before each sync, PiBar will attempt to delete all adlists on the Secondary Pi-hole (or disable them if deletion isn’t supported), then re-apply adlists from the Primary. This can temporarily reduce blocking on the Secondary until gravity updates."
-        alert.alertStyle = .warning
+        alert.messageText     = "Enable destructive pre-clean?"
+        alert.informativeText = "Before each sync, PiBar will attempt to delete all adlists on the Secondary Pi-hole (or disable them if deletion isn't supported), then re-apply adlists from the Primary. This can temporarily reduce blocking on the Secondary until gravity updates."
+        alert.alertStyle      = .warning
         alert.addButton(withTitle: "Enable")
         alert.addButton(withTitle: "Cancel")
 
         alert.beginSheetModal(for: window) { [weak self] response in
             guard let self else { return }
-            if response == .alertFirstButtonReturn {
-                self.persistSelections()
-            } else {
+            if response != .alertFirstButtonReturn {
                 self.wipeSecondaryCheckbox.state = .off
-                self.persistSelections()
             }
+            self.persistSelections()
             self.refreshUI()
         }
     }
@@ -396,7 +423,6 @@ final class SyncSettingsViewController: NSViewController {
         clearLog()
         appendLog("Sync Now: requested")
         delegate?.syncNowRequestedFromSettings()
-        refreshUI()
     }
 
     @objc private func closePressed() {

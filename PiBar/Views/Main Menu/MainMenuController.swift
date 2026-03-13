@@ -49,6 +49,11 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
     @IBOutlet var webAdminMenuItem: NSMenuItem!
 
 
+    // MARK: - Sync menu item (programmatically managed)
+
+    private var syncNowMenuItem: NSMenuItem?
+    private var syncSeparatorMenuItem: NSMenuItem?
+
     // MARK: - Sub-menus for Multi-hole Setups
 
     private var networkStatusMenu = NSMenu()
@@ -106,11 +111,18 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
         statusBarItem.menu = mainMenu
         mainMenu.delegate = self
 
+        NotificationCenter.default.addObserver(self, selector: #selector(handleSyncBegan),  name: .piBarSyncBegan, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleSyncEnded),  name: .piBarSyncEnded, object: nil)
+
         enableKeyboardShortcut()
 
         if let viewController = preferencesWindowController?.contentViewController as? PreferencesViewController {
             viewController.delegate = self
         }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: - Keyboard Shortcut
@@ -197,8 +209,21 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
 
     internal func syncNowRequested() {
         Log.info("Sync Now requested")
-        // Phase 3 starts with apply-mode adlists sync. Domains/groups remain dry-run until later phases.
-        manager.syncAdlistsNow()
+        manager.syncNow()
+    }
+
+    @objc private func syncNowMenuAction() {
+        manager.syncNow()
+    }
+
+    @objc private func handleSyncBegan() {
+        syncNowMenuItem?.title   = "Syncing…"
+        syncNowMenuItem?.isEnabled = false
+    }
+
+    @objc private func handleSyncEnded() {
+        syncNowMenuItem?.title   = "Sync Now"
+        syncNowMenuItem?.isEnabled = true
     }
 
     private func updateInterface() {
@@ -454,6 +479,40 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
         webAdminMenuItem.isEnabled = false
     }
 
+    private func updateSyncMenuItem() {
+        let shouldShow = Preferences.standard.syncEnabled
+            && !Preferences.standard.syncPrimaryIdentifier.isEmpty
+            && !Preferences.standard.syncSecondaryIdentifier.isEmpty
+
+        if shouldShow {
+            if syncNowMenuItem == nil {
+                let separator = NSMenuItem.separator()
+                let item = NSMenuItem(title: "Sync Now", action: #selector(syncNowMenuAction), keyEquivalent: "")
+                item.target = self
+                // Insert before the last separator + "Preferences…" pair near the bottom.
+                // Find the Preferences item index and insert above it.
+                if let prefsIndex = mainMenu.items.firstIndex(where: { $0.action == #selector(configureMenuBarAction(_:)) }) {
+                    mainMenu.insertItem(separator, at: prefsIndex)
+                    mainMenu.insertItem(item, at: prefsIndex)
+                } else {
+                    mainMenu.addItem(separator)
+                    mainMenu.addItem(item)
+                }
+                syncSeparatorMenuItem = separator
+                syncNowMenuItem = item
+            }
+        } else {
+            if let item = syncNowMenuItem {
+                mainMenu.removeItem(item)
+                syncNowMenuItem = nil
+            }
+            if let sep = syncSeparatorMenuItem {
+                mainMenu.removeItem(sep)
+                syncSeparatorMenuItem = nil
+            }
+        }
+    }
+
     private func updateMenuButtons() {
         guard let networkOverview = networkOverview else { return }
         let currentStatus = networkOverview.networkStatus
@@ -483,5 +542,7 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
             disableNetworkMenuItem.title = "Disable Pi-hole"
             enableNetworkMenuItem.title = "Enable Pi-hole"
         }
+
+        updateSyncMenuItem()
     }
 }

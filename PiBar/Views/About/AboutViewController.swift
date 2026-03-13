@@ -13,7 +13,7 @@ import Cocoa
 
 class AboutViewController: NSViewController {
     @IBAction func aboutURLAction(_: NSButton) {
-        let url = URL(string: "https://github.com/amiantos/pibar")!
+        let url = URL(string: "https://github.com/foosmith/pibar")!
         NSWorkspace.shared.open(url)
     }
 
