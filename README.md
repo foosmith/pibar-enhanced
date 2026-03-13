@@ -57,6 +57,22 @@ Keep two Pi-hole v6 instances in sync automatically. The Primary is the source o
 - Removed all deprecated/unused persistence code
 - Force-unwrap patterns replaced with safe handling at API boundary
 
+## Download & Install
+
+### Latest Release — 2.0 (beta)
+
+**[⬇ Download PiBar-2.0-beta.zip](https://github.com/foosmith/pibar-enhanced/releases/latest/download/PiBar-2.0-beta.zip)**
+
+Requires macOS 13 or later.
+
+1. Download and unzip **PiBar-2.0-beta.zip**
+2. Move **PiBar.app** to your `/Applications` folder
+3. Launch PiBar — it will appear in your menu bar
+
+> **First launch on macOS:** Because this build is not notarized, Gatekeeper may block it. Right-click (or Control-click) **PiBar.app** and choose **Open**, then confirm in the dialog that appears.
+
+All releases are listed on the [Releases page](https://github.com/foosmith/pibar-enhanced/releases).
+
 ## Screenshots
 
 ![PiBar Screenshots](/.github/screenshots.jpg?raw=true)
