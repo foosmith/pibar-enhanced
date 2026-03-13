@@ -61,7 +61,7 @@ Keep two Pi-hole v6 instances in sync automatically. The Primary is the source o
 
 ### Latest Release — 2.0 (beta)
 
-**[⬇ Download PiBar-2.0-beta.zip](https://github.com/foosmith/pibar-enhanced/releases/latest/download/PiBar-2.0-beta.zip)**
+**[⬇ Download PiBar-2.0-beta.zip](https://github.com/foosmith/pibar-enhanced/releases/download/v2.0-beta/PiBar-2.0-beta.zip)**
 
 Requires macOS 13 or later.
 
