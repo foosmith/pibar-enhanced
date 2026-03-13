@@ -29,7 +29,9 @@ final class UpdatePiholeV6Operation: AsyncOperation, @unchecked Sendable {
                 summary: nil,
                 canBeManaged: false,
                 enabled: nil,
-                isV6: true
+                isV6: true,
+                topDomains: [],
+                topClients: []
             )
             state = .isFinished
             return
@@ -42,8 +44,14 @@ final class UpdatePiholeV6Operation: AsyncOperation, @unchecked Sendable {
             var canBeManaged = !api6.connection.token.isEmpty || !api6.connection.passwordProtected
 
             do {
-                let result = try await api6.fetchSummary()
-                let blockingResult = try await api6.fetchBlockingStatus()
+                async let summaryResult = api6.fetchSummary()
+                async let blockingStatusResult = api6.fetchBlockingStatus()
+                async let topDomainsResult = api6.fetchTopDomains()
+                async let topClientsResult = api6.fetchTopClients()
+                let result = try await summaryResult
+                let blockingResult = try await blockingStatusResult
+                let topDomains = try await topDomainsResult
+                let topClients = try await topClientsResult
 
                 if blockingResult.blocking != "enabled" {
                     enabled = false
@@ -70,7 +78,9 @@ final class UpdatePiholeV6Operation: AsyncOperation, @unchecked Sendable {
                     summary: newSummary,
                     canBeManaged: canBeManaged,
                     enabled: enabled,
-                    isV6: true
+                    isV6: true,
+                    topDomains: topDomains,
+                    topClients: topClients
                 )
             } catch {
                 Log.error(error)
@@ -85,7 +95,9 @@ final class UpdatePiholeV6Operation: AsyncOperation, @unchecked Sendable {
                     summary: nil,
                     canBeManaged: canBeManaged,
                     enabled: enabled,
-                    isV6: true
+                    isV6: true,
+                    topDomains: [],
+                    topClients: []
                 )
             }
             self.state = .isFinished

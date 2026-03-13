@@ -123,6 +123,40 @@ struct PiholeAPIStatus: Decodable {
     let status: String
 }
 
+struct TopListEntry {
+    let name: String
+    let count: Int
+}
+
+enum QuickDomainAction {
+    case allow
+    case block
+
+    var buttonTitle: String {
+        switch self {
+        case .allow: return "Allow"
+        case .block: return "Block"
+        }
+    }
+
+    var pastTenseTitle: String {
+        switch self {
+        case .allow: return "Allowed"
+        case .block: return "Blocked"
+        }
+    }
+}
+
+struct PiBarActionResult {
+    let actionTitle: String
+    let successfulIdentifiers: [String]
+    let failedIdentifiers: [String]
+
+    var succeededEverywhere: Bool {
+        !successfulIdentifiers.isEmpty && failedIdentifiers.isEmpty
+    }
+}
+
 // MARK: - Pi-hole Network
 
 enum PiholeNetworkStatus: String {
@@ -144,6 +178,8 @@ struct Pihole {
     let canBeManaged: Bool?
     let enabled: Bool?
     let isV6: Bool
+    let topDomains: [TopListEntry]
+    let topClients: [TopListEntry]
 
     var status: PiholeNetworkStatus {
         if !online {

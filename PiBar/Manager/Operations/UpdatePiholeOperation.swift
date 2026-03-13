@@ -29,7 +29,9 @@ final class UpdatePiholeOperation: AsyncOperation, @unchecked Sendable {
                 summary: nil,
                 canBeManaged: false,
                 enabled: nil,
-                isV6: false
+                isV6: false,
+                topDomains: [],
+                topClients: []
             )
             state = .isFinished
             return
@@ -41,6 +43,8 @@ final class UpdatePiholeOperation: AsyncOperation, @unchecked Sendable {
             var enabled: Bool? = true
             var online = true
             var canBeManaged: Bool = false
+            var topDomains: [TopListEntry] = []
+            var topClients: [TopListEntry] = []
 
             if let summary = summary {
                 if summary.status != "enabled" {
@@ -49,6 +53,36 @@ final class UpdatePiholeOperation: AsyncOperation, @unchecked Sendable {
                 if !api.connection.token.isEmpty || !api.connection.passwordProtected {
                     canBeManaged = true
                 }
+
+                let group = DispatchGroup()
+                group.enter()
+                api.fetchTopDomains { entries in
+                    topDomains = entries
+                    group.leave()
+                }
+                group.enter()
+                api.fetchTopClients { entries in
+                    topClients = entries
+                    group.leave()
+                }
+                group.notify(queue: .global(qos: .background)) {
+                    let updatedPihole: Pihole = Pihole(
+                        api: api,
+                        api6: nil,
+                        identifier: api.identifier,
+                        online: online,
+                        summary: summary,
+                        canBeManaged: canBeManaged,
+                        enabled: enabled,
+                        isV6: false,
+                        topDomains: topDomains,
+                        topClients: topClients
+                    )
+
+                    self.pihole = updatedPihole
+                    self.state = .isFinished
+                }
+                return
             } else {
                 enabled = nil
                 online = false
@@ -62,7 +96,10 @@ final class UpdatePiholeOperation: AsyncOperation, @unchecked Sendable {
                 online: online,
                 summary: summary,
                 canBeManaged: canBeManaged,
-                enabled: enabled, isV6: false
+                enabled: enabled,
+                isV6: false,
+                topDomains: [],
+                topClients: []
             )
 
             self.pihole = updatedPihole

@@ -165,6 +165,56 @@ class PiBarManager: NSObject {
         operationQueue.addOperation(completionOperation)
     }
 
+    func updateGravity(completion: @escaping (PiBarActionResult) -> Void) {
+        performManagedAction(actionTitle: "Update Gravity", completion: completion) { pihole, done in
+            if let api6 = pihole.api6 {
+                Task {
+                    do {
+                        try await api6.updateGravity()
+                        done(true)
+                    } catch {
+                        Log.error(error)
+                        done(false)
+                    }
+                }
+            } else if let api = pihole.api {
+                api.updateGravity(completion: done)
+            } else {
+                done(false)
+            }
+        }
+    }
+
+    func applyQuickDomainAction(_ action: QuickDomainAction, domain: String, completion: @escaping (PiBarActionResult) -> Void) {
+        performManagedAction(actionTitle: "\(action.buttonTitle) “\(domain)”", completion: completion) { pihole, done in
+            if let api6 = pihole.api6 {
+                Task {
+                    do {
+                        switch action {
+                        case .allow:
+                            try await api6.allow(domain: domain)
+                        case .block:
+                            try await api6.block(domain: domain)
+                        }
+                        done(true)
+                    } catch {
+                        Log.error(error)
+                        done(false)
+                    }
+                }
+            } else if let api = pihole.api {
+                switch action {
+                case .allow:
+                    api.allow(domain: domain, completion: done)
+                case .block:
+                    api.block(domain: domain, completion: done)
+                }
+            } else {
+                done(false)
+            }
+        }
+    }
+
     // MARK: - Private Functions
 
     // MARK: Timer
@@ -194,6 +244,56 @@ class PiBarManager: NSObject {
             Log.debug("Manager: Sync Timer Stopped")
             existingTimer.invalidate()
             syncTimer = nil
+        }
+    }
+
+    private func performManagedAction(
+        actionTitle: String,
+        completion: @escaping (PiBarActionResult) -> Void,
+        performer: @escaping (Pihole, @escaping (Bool) -> Void) -> Void
+    ) {
+        piholesLock.lock()
+        let manageablePiholes = piholes.values.filter { $0.canBeManaged ?? false }
+        piholesLock.unlock()
+
+        guard !manageablePiholes.isEmpty else {
+            DispatchQueue.main.async {
+                completion(PiBarActionResult(actionTitle: actionTitle, successfulIdentifiers: [], failedIdentifiers: []))
+            }
+            return
+        }
+
+        stopTimer()
+
+        let group = DispatchGroup()
+        let resultLock = NSLock()
+        var successful: [String] = []
+        var failed: [String] = []
+
+        for pihole in manageablePiholes {
+            group.enter()
+            performer(pihole) { succeeded in
+                resultLock.lock()
+                if succeeded {
+                    successful.append(pihole.identifier)
+                } else {
+                    failed.append(pihole.identifier)
+                }
+                resultLock.unlock()
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
+            self.updatePiholes()
+            self.startTimer()
+            completion(
+                PiBarActionResult(
+                    actionTitle: actionTitle,
+                    successfulIdentifiers: successful.sorted(),
+                    failedIdentifiers: failed.sorted()
+                )
+            )
         }
     }
 
@@ -233,7 +333,9 @@ class PiBarManager: NSObject {
                     summary: nil,
                     canBeManaged: nil,
                     enabled: nil,
-                    isV6: true
+                    isV6: true,
+                    topDomains: [],
+                    topClients: []
                 )
                 piholesLock.unlock()
             } else {
@@ -247,7 +349,9 @@ class PiBarManager: NSObject {
                     summary: nil,
                     canBeManaged: nil,
                     enabled: nil,
-                    isV6: false
+                    isV6: false,
+                    topDomains: [],
+                    topClients: []
                 )
                 piholesLock.unlock()
                     

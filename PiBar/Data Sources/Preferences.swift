@@ -22,6 +22,7 @@ struct Preferences {
         static let showLabels = "showLabels"
         static let verboseLabels = "verboseLabels"
         static let shortcutEnabled = "shortcutEnabled"
+        static let notificationsEnabled = "notificationsEnabled"
         static let pollingRate = "pollingRate"
         static let didMigrateLegacyDefaults = "didMigrateLegacyDefaults"
 
@@ -58,6 +59,7 @@ struct Preferences {
             Key.showLabels: false,
             Key.verboseLabels: false,
             Key.shortcutEnabled: true,
+            Key.notificationsEnabled: true,
             Key.pollingRate: 3,
             Key.didMigrateLegacyDefaults: false,
 
@@ -122,6 +124,7 @@ struct Preferences {
             if let value = legacy[Key.showLabels] { database.set(value, forKey: Key.showLabels) }
             if let value = legacy[Key.verboseLabels] { database.set(value, forKey: Key.verboseLabels) }
             if let value = legacy[Key.shortcutEnabled] { database.set(value, forKey: Key.shortcutEnabled) }
+            if let value = legacy[Key.notificationsEnabled] { database.set(value, forKey: Key.notificationsEnabled) }
             if let value = legacy[Key.pollingRate] { database.set(value, forKey: Key.pollingRate) }
 
             Log.debug("Migrated legacy defaults from \(domain)")
@@ -225,6 +228,14 @@ extension UserDefaults {
 
     func set(shortcutEnabled: Bool) {
         set(shortcutEnabled, for: Preferences.Key.shortcutEnabled)
+    }
+
+    var notificationsEnabled: Bool {
+        bool(forKey: Preferences.Key.notificationsEnabled)
+    }
+
+    func set(notificationsEnabled: Bool) {
+        set(notificationsEnabled, for: Preferences.Key.notificationsEnabled)
     }
 
     var pollingRate: Int {

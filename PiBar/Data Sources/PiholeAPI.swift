@@ -28,6 +28,7 @@ class PiholeAPI: NSObject {
         static let topClients = PiholeAPIEndpoint(queryParameter: "topClients", authorizationRequired: true)
         static let enable = PiholeAPIEndpoint(queryParameter: "enable", authorizationRequired: true)
         static let disable = PiholeAPIEndpoint(queryParameter: "disable", authorizationRequired: true)
+        static let updateGravity = PiholeAPIEndpoint(queryParameter: "updateGravity", authorizationRequired: true)
         static let recentBlocked = PiholeAPIEndpoint(queryParameter: "recentBlocked", authorizationRequired: true)
     }
 
@@ -66,10 +67,28 @@ class PiholeAPI: NSObject {
         return components.url
     }
 
+    private func makeURL(queryItems: [URLQueryItem]) -> URL? {
+        var components = URLComponents()
+        components.scheme = connection.useSSL ? "https" : "http"
+        components.host = connection.hostname
+        components.port = connection.port
+        components.path = path
+        components.queryItems = queryItems
+        return components.url
+    }
+
     private func get(_ endpoint: PiholeAPIEndpoint, argument: String? = nil, completion: @escaping (String?) -> Void) {
         guard let builtURL = makeURL(for: endpoint, argument: argument) else { return completion(nil) }
+        executeRequest(url: builtURL, completion: completion)
+    }
 
-        var urlRequest = URLRequest(url: builtURL)
+    private func get(queryItems: [URLQueryItem], completion: @escaping (String?) -> Void) {
+        guard let builtURL = makeURL(queryItems: queryItems) else { return completion(nil) }
+        executeRequest(url: builtURL, completion: completion)
+    }
+
+    private func executeRequest(url: URL, completion: @escaping (String?) -> Void) {
+        var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = "GET"
         urlRequest.timeoutInterval = requestTimeout
         let session = URLSession(configuration: .default)
@@ -92,6 +111,35 @@ class PiholeAPI: NSObject {
             }
         }
         dataTask.resume()
+    }
+
+    private func topEntries(from string: String, preferredKeys: [String]) -> [TopListEntry] {
+        guard let data = string.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return []
+        }
+
+        for key in preferredKeys {
+            guard let values = object[key] as? [String: Any] else { continue }
+
+            return values.compactMap { name, rawCount in
+                if let count = rawCount as? Int {
+                    return TopListEntry(name: name, count: count)
+                }
+                if let countString = rawCount as? String, let count = Int(countString) {
+                    return TopListEntry(name: name, count: count)
+                }
+                return nil
+            }
+            .sorted { lhs, rhs in
+                if lhs.count == rhs.count {
+                    return lhs.name < rhs.name
+                }
+                return lhs.count > rhs.count
+            }
+        }
+
+        return []
     }
 
     private func decodeJSON<T>(_ string: String) -> T? where T: Decodable {
@@ -157,6 +205,24 @@ class PiholeAPI: NSObject {
         }
     }
 
+    func fetchTopDomains(completion: @escaping ([TopListEntry]) -> Void) {
+        DispatchQueue.global(qos: .background).async {
+            self.get(Endpoints.topItems, argument: "10") { string in
+                guard let string else { return completion([]) }
+                completion(self.topEntries(from: string, preferredKeys: ["top_queries", "top_ads"]))
+            }
+        }
+    }
+
+    func fetchTopClients(completion: @escaping ([TopListEntry]) -> Void) {
+        DispatchQueue.global(qos: .background).async {
+            self.get(Endpoints.topClients, argument: "10") { string in
+                guard let string else { return completion([]) }
+                completion(self.topEntries(from: string, preferredKeys: ["top_sources", "top_clients"]))
+            }
+        }
+    }
+
     func disable(seconds: Int? = nil, completion: @escaping (Bool) -> Void) {
         DispatchQueue.global(qos: .background).async {
             var secondsString: String?
@@ -177,6 +243,38 @@ class PiholeAPI: NSObject {
                 guard let jsonString = string,
                     let _: PiholeAPIStatus = self.decodeJSON(jsonString) else { return completion(false) }
                 completion(true)
+            }
+        }
+    }
+
+    func updateGravity(completion: @escaping (Bool) -> Void) {
+        DispatchQueue.global(qos: .background).async {
+            self.get(Endpoints.updateGravity) { string in
+                completion(string != nil)
+            }
+        }
+    }
+
+    func allow(domain: String, completion: @escaping (Bool) -> Void) {
+        updateDomainList(named: "white", domain: domain, completion: completion)
+    }
+
+    func block(domain: String, completion: @escaping (Bool) -> Void) {
+        updateDomainList(named: "black", domain: domain, completion: completion)
+    }
+
+    private func updateDomainList(named listName: String, domain: String, completion: @escaping (Bool) -> Void) {
+        DispatchQueue.global(qos: .background).async {
+            var queryItems = [
+                URLQueryItem(name: "list", value: listName),
+                URLQueryItem(name: "add", value: domain),
+            ]
+            if !self.connection.token.isEmpty {
+                queryItems.insert(URLQueryItem(name: "auth", value: self.connection.token), at: 0)
+            }
+
+            self.get(queryItems: queryItems) { string in
+                completion(string != nil && string != "[]")
             }
         }
     }

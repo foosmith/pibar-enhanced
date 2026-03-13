@@ -18,6 +18,7 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
     private let manager: PiBarManager = PiBarManager()
 
     private var networkOverview: PiholeNetworkOverview?
+    private var hasDeliveredInitialStatusNotification = false
 
     // MARK: - Internal Views
 
@@ -71,6 +72,15 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
     private var webAdminMenu = NSMenu()
     private var webAdminMenuItems: [String: NSMenuItem] = [:]
 
+    private var topDomainsMenuItem: NSMenuItem?
+    private var topDomainsMenu = NSMenu()
+
+    private var topClientsMenuItem: NSMenuItem?
+    private var topClientsMenu = NSMenu()
+
+    private var updateGravityMenuItem: NSMenuItem?
+    private var quickAllowBlockMenuItem: NSMenuItem?
+
     // MARK: - Actions
 
     @IBAction func configureMenuBarAction(_: NSMenuItem) {
@@ -110,6 +120,7 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
         }
         statusBarItem.menu = mainMenu
         mainMenu.delegate = self
+        installDynamicMenuItems()
 
         NotificationCenter.default.addObserver(self, selector: #selector(handleSyncBegan),  name: .piBarSyncBegan, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handleSyncEnded),  name: .piBarSyncEnded, object: nil)
@@ -156,6 +167,7 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
     }
 
     internal func updateNetwork(_ network: PiholeNetworkOverview) {
+        notifyIfNeeded(for: network)
         networkOverview = network
         updateInterface()
         DispatchQueue.main.async {
@@ -226,6 +238,44 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
         syncNowMenuItem?.isEnabled = true
     }
 
+    @objc private func updateGravityMenuAction() {
+        manager.updateGravity { [weak self] result in
+            self?.handleActionResult(result, successBody: "Gravity update started on \(result.successfulIdentifiers.count) Pi-hole(s).")
+        }
+    }
+
+    @objc private func quickAllowBlockMenuAction() {
+        let alert = NSAlert()
+        alert.messageText = "Quick Allow/Block"
+        alert.informativeText = "Enter a domain to allow or block across all manageable Pi-hole connections."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: QuickDomainAction.allow.buttonTitle)
+        alert.addButton(withTitle: QuickDomainAction.block.buttonTitle)
+        alert.addButton(withTitle: "Cancel")
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        field.placeholderString = "example.com"
+        alert.accessoryView = field
+
+        let response = alert.runModal()
+        let domain = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !domain.isEmpty else { return }
+
+        let action: QuickDomainAction
+        switch response {
+        case .alertFirstButtonReturn:
+            action = .allow
+        case .alertSecondButtonReturn:
+            action = .block
+        default:
+            return
+        }
+
+        manager.applyQuickDomainAction(action, domain: domain) { [weak self] result in
+            self?.handleActionResult(result, successBody: "\(action.pastTenseTitle) \(domain) on \(result.successfulIdentifiers.count) Pi-hole(s).")
+        }
+    }
+
     private func updateInterface() {
         Log.debug("Updating Interface")
 
@@ -234,7 +284,31 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
             self.updateStatusButtons()
             self.updateMenuButtons()
             self.updateStatusSubmenus()
+            self.updateTopListMenus()
         }
+    }
+
+    private func notifyIfNeeded(for updatedNetwork: PiholeNetworkOverview) {
+        let previousStatus = networkOverview?.networkStatus
+        let currentStatus = updatedNetwork.networkStatus
+
+        guard hasDeliveredInitialStatusNotification else {
+            hasDeliveredInitialStatusNotification = true
+            return
+        }
+
+        guard let previousStatus, previousStatus != .initializing, previousStatus != currentStatus else {
+            return
+        }
+
+        guard Preferences.standard.notificationsEnabled else {
+            return
+        }
+
+        AppDelegate.deliverNotification(
+            title: "PiBar Status Changed",
+            body: "\(previousStatus.rawValue) → \(currentStatus.rawValue)"
+        )
     }
 
     private func setMenuBarTitle(_ title: String) {
@@ -444,6 +518,133 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
         }
     }
 
+    private func installDynamicMenuItems() {
+        installTopListMenuItems()
+        installActionMenuItems()
+    }
+
+    private func installTopListMenuItems() {
+        guard topDomainsMenuItem == nil,
+              topClientsMenuItem == nil,
+              let blocklistIndex = mainMenu.items.firstIndex(where: { $0 === mainBlocklistMenuItem }) else {
+            return
+        }
+
+        let domainsItem = NSMenuItem(title: "Top Domains", action: nil, keyEquivalent: "")
+        domainsItem.isEnabled = false
+        mainMenu.insertItem(domainsItem, at: blocklistIndex + 1)
+        topDomainsMenuItem = domainsItem
+
+        let clientsItem = NSMenuItem(title: "Top Clients", action: nil, keyEquivalent: "")
+        clientsItem.isEnabled = false
+        mainMenu.insertItem(clientsItem, at: blocklistIndex + 2)
+        topClientsMenuItem = clientsItem
+    }
+
+    private func installActionMenuItems() {
+        guard updateGravityMenuItem == nil,
+              quickAllowBlockMenuItem == nil,
+              let adminIndex = mainMenu.items.firstIndex(where: { $0 === webAdminMenuItem }) else {
+            return
+        }
+
+        let gravityItem = NSMenuItem(title: "Update Gravity", action: #selector(updateGravityMenuAction), keyEquivalent: "g")
+        gravityItem.target = self
+        gravityItem.isEnabled = false
+        mainMenu.insertItem(gravityItem, at: adminIndex + 1)
+        updateGravityMenuItem = gravityItem
+
+        let quickItem = NSMenuItem(title: "Quick Allow/Block…", action: #selector(quickAllowBlockMenuAction), keyEquivalent: "b")
+        quickItem.target = self
+        quickItem.isEnabled = false
+        mainMenu.insertItem(quickItem, at: adminIndex + 2)
+        quickAllowBlockMenuItem = quickItem
+    }
+
+    private func updateTopListMenus() {
+        guard let networkOverview else { return }
+
+        configureTopListMenu(
+            item: topDomainsMenuItem,
+            menu: topDomainsMenu,
+            title: "Top Domains",
+            entriesByPihole: networkOverview.piholes
+                .sorted { $0.key < $1.key }
+                .map { ($0.key, $0.value.topDomains) }
+        )
+
+        configureTopListMenu(
+            item: topClientsMenuItem,
+            menu: topClientsMenu,
+            title: "Top Clients",
+            entriesByPihole: networkOverview.piholes
+                .sorted { $0.key < $1.key }
+                .map { ($0.key, $0.value.topClients) }
+        )
+    }
+
+    private func configureTopListMenu(
+        item: NSMenuItem?,
+        menu: NSMenu,
+        title: String,
+        entriesByPihole: [(String, [TopListEntry])]
+    ) {
+        guard let item, let mainMenu = item.menu else { return }
+
+        menu.removeAllItems()
+        let nonEmpty = entriesByPihole.filter { !$0.1.isEmpty }
+        item.title = title
+
+        guard !nonEmpty.isEmpty else {
+            mainMenu.setSubmenu(nil, for: item)
+            item.isEnabled = false
+            return
+        }
+
+        if nonEmpty.count == 1, let entries = nonEmpty.first?.1 {
+            entries.prefix(10).forEach { entry in
+                menu.addItem(NSMenuItem(title: "\(entry.name): \(entry.count.string)", action: nil, keyEquivalent: ""))
+            }
+        } else {
+            for (identifier, entries) in nonEmpty {
+                let parentItem = NSMenuItem(title: identifier, action: nil, keyEquivalent: "")
+                let submenu = NSMenu(title: identifier)
+                entries.prefix(10).forEach { entry in
+                    submenu.addItem(NSMenuItem(title: "\(entry.name): \(entry.count.string)", action: nil, keyEquivalent: ""))
+                }
+                menu.setSubmenu(submenu, for: parentItem)
+                menu.addItem(parentItem)
+            }
+        }
+
+        mainMenu.setSubmenu(menu, for: item)
+        item.isEnabled = true
+    }
+
+    private func handleActionResult(_ result: PiBarActionResult, successBody: String) {
+        if result.successfulIdentifiers.isEmpty && result.failedIdentifiers.isEmpty {
+            let alert = NSAlert()
+            alert.messageText = result.actionTitle
+            alert.informativeText = "No manageable Pi-hole connections are currently available."
+            alert.runModal()
+            return
+        }
+
+        if !result.successfulIdentifiers.isEmpty {
+            if Preferences.standard.notificationsEnabled {
+                AppDelegate.deliverNotification(title: result.actionTitle, body: successBody)
+            }
+        }
+
+        guard !result.failedIdentifiers.isEmpty else { return }
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "\(result.actionTitle) finished with issues"
+        alert.informativeText = "Failed on: \(result.failedIdentifiers.joined(separator: ", "))"
+        alert.runModal()
+    }
+
     private func clearSubmenus() {
         guard let mainMenu = mainNetworkStatusMenuItem.menu else { return }
         if mainNetworkStatusMenuItem.hasSubmenu {
@@ -474,6 +675,14 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
             mainMenu.setSubmenu(nil, for: webAdminMenuItem)
             webAdminMenu.removeAllItems()
             webAdminMenuItems.removeAll()
+        }
+        if let topDomainsMenuItem, topDomainsMenuItem.hasSubmenu {
+            mainMenu.setSubmenu(nil, for: topDomainsMenuItem)
+            topDomainsMenu.removeAllItems()
+        }
+        if let topClientsMenuItem, topClientsMenuItem.hasSubmenu {
+            mainMenu.setSubmenu(nil, for: topClientsMenuItem)
+            topClientsMenu.removeAllItems()
         }
         webAdminMenuItem.action = nil
         webAdminMenuItem.isEnabled = false
@@ -542,6 +751,9 @@ class MainMenuController: NSObject, NSMenuDelegate, PreferencesDelegate, PiBarMa
             disableNetworkMenuItem.title = "Disable Pi-hole"
             enableNetworkMenuItem.title = "Enable Pi-hole"
         }
+
+        updateGravityMenuItem?.isEnabled = networkOverview.canBeManaged
+        quickAllowBlockMenuItem?.isEnabled = networkOverview.canBeManaged
 
         updateSyncMenuItem()
     }

@@ -158,6 +158,13 @@ struct PiholeV6BlockingRequest: Encodable {
     let timer: Int?
 }
 
+private struct PiholeV6DomainCreateRequest: Encodable {
+    let domain: String
+    let enabled: Bool?
+    let comment: String?
+    let groups: [Int]?
+}
+
 class Pihole6API: NSObject {
     let connection: PiholeConnectionV3
 
@@ -242,6 +249,32 @@ class Pihole6API: NSObject {
         do {
             return try await post("/dns/blocking", responseType: Pihole6APIBlockingStatus.self, apiKey: connection.token, body: PiholeV6BlockingRequest(blocking: true, timer: nil))
         }
+    }
+
+    func fetchTopDomains() async throws -> [TopListEntry] {
+        let data = try await getData("/stats/top_domains", apiKey: connection.token, queryItems: [URLQueryItem(name: "count", value: "10")])
+        return parseTopEntries(from: data, preferredKeys: ["domains", "top_domains", "queries"])
+    }
+
+    func fetchTopClients() async throws -> [TopListEntry] {
+        let data = try await getData("/stats/top_clients", apiKey: connection.token, queryItems: [URLQueryItem(name: "count", value: "10")])
+        return parseTopEntries(from: data, preferredKeys: ["clients", "top_clients"])
+    }
+
+    func updateGravity() async throws {
+        _ = try await postData(
+            "/action/gravity",
+            apiKey: connection.token,
+            queryItems: [URLQueryItem(name: "app_sudo", value: "true")]
+        )
+    }
+
+    func allow(domain: String) async throws {
+        try await add(domain: domain, to: "/domains/allow/exact")
+    }
+
+    func block(domain: String) async throws {
+        try await add(domain: domain, to: "/domains/deny/exact")
     }
     
     // Ugly Innards
@@ -380,6 +413,82 @@ class Pihole6API: NSObject {
         let url = try makeURL(for: path, queryItems: queryItems)
         let request = try request(for: url, method: "DELETE", apiKey: apiKey)
         return try await performData(request)
+    }
+
+    private func add(domain: String, to path: String) async throws {
+        _ = try await postData(
+            path,
+            apiKey: connection.token,
+            queryItems: [URLQueryItem(name: "app_sudo", value: "true")],
+            body: PiholeV6DomainCreateRequest(domain: domain, enabled: true, comment: "Added via PiBar", groups: nil)
+        )
+    }
+
+    private func parseTopEntries(from data: Data, preferredKeys: [String]) -> [TopListEntry] {
+        guard let object = try? JSONSerialization.jsonObject(with: data) else {
+            return []
+        }
+
+        let root = object as? [String: Any] ?? [:]
+        for key in preferredKeys {
+            if let entries = root[key] {
+                let parsed = parseTopEntries(from: entries)
+                if !parsed.isEmpty {
+                    return parsed
+                }
+            }
+        }
+
+        return parseTopEntries(from: object)
+    }
+
+    private func parseTopEntries(from object: Any) -> [TopListEntry] {
+        if let dictionary = object as? [String: Any] {
+            let entries = dictionary.compactMap { key, value -> TopListEntry? in
+                if let count = value as? Int {
+                    return TopListEntry(name: key, count: count)
+                }
+                if let countString = value as? String, let count = Int(countString) {
+                    return TopListEntry(name: key, count: count)
+                }
+                if let nested = value as? [String: Any] {
+                    let label = (nested["name"] ?? nested["domain"] ?? nested["client"] ?? key) as? String ?? key
+                    let count = nested["count"] as? Int
+                        ?? nested["queries"] as? Int
+                        ?? nested["blocked"] as? Int
+                    if let count {
+                        return TopListEntry(name: label, count: count)
+                    }
+                }
+                return nil
+            }
+            return sortTopEntries(entries)
+        }
+
+        if let array = object as? [[String: Any]] {
+            let entries = array.compactMap { item -> TopListEntry? in
+                let name = item["name"] as? String
+                    ?? item["domain"] as? String
+                    ?? item["client"] as? String
+                let count = item["count"] as? Int
+                    ?? item["queries"] as? Int
+                    ?? item["blocked"] as? Int
+                guard let name, let count else { return nil }
+                return TopListEntry(name: name, count: count)
+            }
+            return sortTopEntries(entries)
+        }
+
+        return []
+    }
+
+    private func sortTopEntries(_ entries: [TopListEntry]) -> [TopListEntry] {
+        entries.sorted { lhs, rhs in
+            if lhs.count == rhs.count {
+                return lhs.name < rhs.name
+            }
+            return lhs.count > rhs.count
+        }
     }
 
     static func encodePathComponent(_ raw: String) -> String {
