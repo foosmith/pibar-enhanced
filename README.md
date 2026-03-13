@@ -69,7 +69,7 @@ Requires macOS 13 or later.
 2. Move **PiBar.app** to your `/Applications` folder
 3. Launch PiBar — it will appear in your menu bar
 
-> **First launch on macOS:** Because this build is not notarized, Gatekeeper may block it. Right-click (or Control-click) **PiBar.app** and choose **Open**, then confirm in the dialog that appears.
+> **First launch on macOS:** Because this build is not notarized, Gatekeeper may show a `“PiBar.app” Not Opened` warning and offer `Move to Trash`. If that happens, Control-click **PiBar.app** in Finder and choose **Open**, or go to **System Settings → Privacy & Security** and click **Open Anyway** for PiBar.
 
 All releases are listed on the [Releases page](https://github.com/foosmith/pibar-enhanced/releases).
 
